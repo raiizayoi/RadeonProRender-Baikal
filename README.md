@@ -4,8 +4,7 @@ Baikal initiative has been started as a sample application demonstrating the usa
 
 Baikal is fast and efficient GPU-based global illumination renderer implemented using OpenCL and relying on AMD® RadeonRays intersection engine. It is cross-platform and vendor independent. The only requirement it imposes on the hardware is OpenCL 1.2 support. Baikal maintains high level of performance across all vendors, but it is specifically optimized for AMD® GPUs and APUs.
 
-![Image](https://github.com/GPUOpen-LibrariesAndSDKs/RadeonProRender-Baikal/blob/master/Doc/Images/1.jpg)
-“Science Fiction” scene is a courtesy of Juan Carlos Silva, 3drender.com.
+![Image](https://github.com/GPUOpen-LibrariesAndSDKs/RadeonProRender-Baikal/blob/master/Doc/Images/5.jpg)
 
 # Build
 ## System requirements
@@ -124,6 +123,12 @@ The list of supported texture formats:
 - tx
 - dds (limited support)
 - tga
+
+You can download additional test scenes from [RadeonProRender-Tests](https://github.com/GPUOpen-LibrariesAndSDKs/RadeonProRender-Tests). Once extracted, you can load e.g. the Classroom example like this:
+
+`../build/bin/BaikalStandalone -p /path/to/extracted/folder/Classroom/ -f classroom.obj`
+
+The path can be absolute or relative to `BaikalStandalone`.
 
 ## Run unit tests
 - `export LD_LIBRARY_PATH=<RadeonProRender-Baikal path>/build/bin/:${LD_LIBRARY_PATH}`

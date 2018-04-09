@@ -1,5 +1,5 @@
 #include "image_io.h"
-#include "../texture.h"
+#include "SceneGraph/texture.h"
 
 #include "OpenImageIO/imageio.h"
 
@@ -104,7 +104,7 @@ namespace Baikal
         }
 
         //
-        return Texture::Create(texturedata, RadeonRays::int2(spec.width, spec.height), fmt);;
+        return Texture::Create(texturedata, RadeonRays::int3(spec.width, spec.height, spec.depth), fmt);;
     }
 
     void Oiio::SaveImage(std::string const& filename, Texture::Ptr texture) const

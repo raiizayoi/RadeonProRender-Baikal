@@ -75,7 +75,7 @@ namespace Baikal
         void DropDirty(Iterator& light_iterator) const;
     public:
         // Update camera data only.
-        virtual void UpdateCamera(Scene1 const& scene, Collector& mat_collector, Collector& tex_collector, CompiledScene& out) const = 0;
+        virtual void UpdateCamera(Scene1 const& scene, Collector& mat_collector, Collector& tex_collector, Collector& vol_collector, CompiledScene& out) const = 0;
         // Update shape data only.
         virtual void UpdateShapes(Scene1 const& scene, Collector& mat_collector, Collector& tex_collector, Collector& volume_collector, CompiledScene& out) const = 0;
         // Update shape transforms
@@ -95,7 +95,7 @@ namespace Baikal
         // If m_current_scene changes
         virtual void UpdateCurrentScene(Scene1 const& scene, CompiledScene& out) const = 0;
         // Update volume materials only
-        virtual void UpdateVolumes(Scene1 const& scene, Collector& volume_collector, CompiledScene& out) const = 0;
+        virtual void UpdateVolumes(Scene1 const& scene, Collector& volume_collector, Collector& tex_collector, CompiledScene& out) const = 0;
         // If scene attributes changed
         virtual void UpdateSceneAttributes(Scene1 const& scene, Collector& tex_collector, CompiledScene& out) const = 0;
 
