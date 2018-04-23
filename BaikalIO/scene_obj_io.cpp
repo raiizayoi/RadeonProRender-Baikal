@@ -346,7 +346,7 @@ namespace Baikal
 
         //scene->AttachLight(light);
         //scene->AttachLight(light1);
-        scene->AttachLight(ibl);
+        //scene->AttachLight(ibl);
 
         return scene;
     }
