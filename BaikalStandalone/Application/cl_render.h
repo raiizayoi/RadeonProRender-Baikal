@@ -48,6 +48,9 @@ namespace Baikal
         {
             std::unique_ptr<Baikal::Output> output;
 
+			std::unique_ptr<Baikal::Output> output_position;
+			std::unique_ptr<Baikal::Output> output_normal;
+
 #ifdef ENABLE_DENOISER
             std::unique_ptr<Baikal::Output> output_position;
             std::unique_ptr<Baikal::Output> output_normal;
@@ -128,5 +131,7 @@ namespace Baikal
         //save GL tex for no interop case
         GLuint m_tex;
         Renderer::OutputType m_output_type;
+
+		
     };
 }

@@ -505,7 +505,7 @@ namespace Baikal
     #endif
 
             // GLUT Window Initialization:
-            m_window = glfwCreateWindow(m_settings.width, m_settings.height, "Baikal standalone demo", nullptr, nullptr);
+            m_window = glfwCreateWindow(m_settings.width * 3, m_settings.height, "Baikal standalone demo", nullptr, nullptr);
             glfwMakeContextCurrent(m_window);
 
     #ifndef __APPLE__
@@ -811,11 +811,13 @@ namespace Baikal
 
             auto gui_out_type = static_cast<Baikal::Renderer::OutputType>(output);
 
+			
             if (gui_out_type != m_cl->GetOutputType())
             {
                 m_cl->SetOutputType(gui_out_type);
                 update = true;
             }
+			
 
             RadeonRays::float3 eye, at;
             eye = camera->GetPosition();

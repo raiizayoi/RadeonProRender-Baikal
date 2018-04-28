@@ -966,6 +966,8 @@ KERNEL void AccumulateData(
 // Copy data to interop texture if supported
 KERNEL void ApplyGammaAndCopyData(
     GLOBAL float4 const* data,
+    GLOBAL float4 const* position_data,
+    GLOBAL float4 const* normal_data,
     int img_width,
     int img_height,
     float gamma,
@@ -980,6 +982,8 @@ KERNEL void ApplyGammaAndCopyData(
     if (global_idx < img_width && global_idy < img_height)
     {
         float4 v = data[global_id];
+        float4 v2 = position_data[global_id];
+        float4 v3 = normal_data[global_id];
 #ifdef ADAPTIVITY_DEBUG
         float a = v.w < 1024 ? min(1.f, v.w / 1024.f) : 0.f;
         float4 mul_color = make_float4(1.f, 1.f - a, 1.f - a, 1.f);
@@ -987,7 +991,11 @@ KERNEL void ApplyGammaAndCopyData(
 #endif
 
         float4 val = clamp(native_powr(v / v.w, 1.f / gamma), 0.f, 1.f);
+        float4 val2 = clamp(native_powr(v2 / v2.w, 1.f / gamma), 0.f, 1.f);
+        float4 val3 = clamp(native_powr(v3 / v3.w, 1.f / gamma), 0.f, 1.f);
         write_imagef(img, make_int2(global_idx, global_idy), val);
+        write_imagef(img, make_int2(global_idx + 512, global_idy), val2);
+        write_imagef(img, make_int2(global_idx + 1024, global_idy), val3);
     }
 } 
 

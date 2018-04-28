@@ -236,7 +236,7 @@ namespace Baikal
         // Find first non-zero AOV to get buffer dimensions
         auto output = FindFirstNonZeroOutput();
         auto output_size = int2(output->width(), output->height());
-
+		
         // Generate tile domain
         GenerateTileDomain(output_size, tile_origin, tile_size);
 

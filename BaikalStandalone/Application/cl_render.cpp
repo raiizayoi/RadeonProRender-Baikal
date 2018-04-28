@@ -128,6 +128,9 @@ namespace Baikal
         {
             m_outputs[i].output = m_cfgs[i].factory->CreateOutput(m_width, m_height);
 
+			m_outputs[i].output_position = m_cfgs[i].factory->CreateOutput(settings.width, settings.height);
+			m_outputs[i].output_normal = m_cfgs[i].factory->CreateOutput(settings.width, settings.height);
+
 #ifdef ENABLE_DENOISER
             m_outputs[i].output_denoised = m_cfgs[i].factory->CreateOutput(settings.width, settings.height);
             m_outputs[i].output_normal = m_cfgs[i].factory->CreateOutput(settings.width, settings.height);
@@ -139,6 +142,9 @@ namespace Baikal
             m_outputs[i].denoiser = m_cfgs[i].factory->CreatePostEffect(Baikal::RenderFactory<Baikal::ClwScene>::PostEffectType::kWaveletDenoiser);
 #endif
             m_cfgs[i].renderer->SetOutput(Baikal::Renderer::OutputType::kColor, m_outputs[i].output.get());
+
+			m_cfgs[i].renderer->SetOutput(Baikal::Renderer::OutputType::kWorldPosition, m_outputs[i].output_position.get());
+			m_cfgs[i].renderer->SetOutput(Baikal::Renderer::OutputType::kWorldShadingNormal, m_outputs[i].output_normal.get());
 
 #ifdef ENABLE_DENOISER
             m_cfgs[i].renderer->SetOutput(Baikal::Renderer::OutputType::kWorldShadingNormal, m_outputs[i].output_normal.get());
@@ -159,6 +165,8 @@ namespace Baikal
         m_shape_id_data.output = m_cfgs[m_primary].factory->CreateOutput(m_width, m_height);
         m_cfgs[m_primary].renderer->Clear(RadeonRays::float3(0, 0, 0), *m_outputs[m_primary].output);
         m_cfgs[m_primary].renderer->Clear(RadeonRays::float3(0, 0, 0), *m_shape_id_data.output);
+
+		
     }
 
 
@@ -251,6 +259,8 @@ namespace Baikal
             {
                 m_cfgs[i].controller->CompileScene(m_scene);
                 m_cfgs[i].renderer->Clear(float3(0, 0, 0), *m_outputs[i].output);
+				m_cfgs[i].renderer->Clear(float3(0, 0, 0), *m_outputs[i].output_position);
+				m_cfgs[i].renderer->Clear(float3(0, 0, 0), *m_outputs[i].output_normal);
 
 #ifdef ENABLE_DENOISER
                 m_cfgs[i].renderer->Clear(float3(0, 0, 0), *m_outputs[i].output_normal);
@@ -289,7 +299,7 @@ namespace Baikal
                 acckernel.SetArg(argc++, static_cast<Baikal::ClwOutput*>(m_outputs[m_primary].output.get())->data());
 
                 int globalsize = settings.width * settings.height;
-                m_cfgs[m_primary].context.Launch1D(0, ((globalsize + 63) / 64) * 64, 64, acckernel);
+                m_cfgs[m_primary].context.Launch1D(0, ((globalsize + 63) / 64) * 64, 64, acckernel);				
             }
         }
 
@@ -312,11 +322,14 @@ namespace Baikal
                 m_outputs[m_primary].udata[4 * i + 2] = (unsigned char)clamp(clamp(pow(m_outputs[m_primary].fdata[i].z / m_outputs[m_primary].fdata[i].w, 1.f / gamma), 0.f, 1.f) * 255, 0, 255);
                 m_outputs[m_primary].udata[4 * i + 3] = 1;
             }
-
+			
+			std::cout << settings.samplecount << "\n";
             glActiveTexture(GL_TEXTURE0);
             glBindTexture(GL_TEXTURE_2D, m_tex);
-            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_outputs[m_primary].output->width(), m_outputs[m_primary].output->height(), GL_RGBA, GL_UNSIGNED_BYTE, &m_outputs[m_primary].udata[0]);
+            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 512, m_outputs[m_primary].output->width(), m_outputs[m_primary].output->height(), GL_RGBA, GL_UNSIGNED_BYTE, &m_outputs[m_primary].udata[0]);			
             glBindTexture(GL_TEXTURE_2D, 0);
+			
+			
         }
         else
         {
@@ -330,11 +343,14 @@ namespace Baikal
             auto output = m_outputs[m_primary].output_denoised.get();
 #else
             auto output = m_outputs[m_primary].output.get();
+			auto position_output = m_outputs[m_primary].output_position.get();
+			auto normal_output = m_outputs[m_primary].output_normal.get();
 #endif
-
             int argc = 0;
 
             copykernel.SetArg(argc++, static_cast<Baikal::ClwOutput*>(output)->data());
+			copykernel.SetArg(argc++, static_cast<Baikal::ClwOutput*>(position_output)->data());
+			copykernel.SetArg(argc++, static_cast<Baikal::ClwOutput*>(normal_output)->data());
             copykernel.SetArg(argc++, output->width());
             copykernel.SetArg(argc++, output->height());
             copykernel.SetArg(argc++, 2.2f);
@@ -360,31 +376,32 @@ namespace Baikal
         //ClwClass::Update();
     }
 
-    void AppClRender::Render(int sample_cnt)
-    {
+	void AppClRender::Render(int sample_cnt)
+	{
 #ifdef ENABLE_DENOISER
-        WaveletDenoiser* wavelet_denoiser = dynamic_cast<WaveletDenoiser*>(m_outputs[m_primary].denoiser.get());
+		WaveletDenoiser* wavelet_denoiser = dynamic_cast<WaveletDenoiser*>(m_outputs[m_primary].denoiser.get());
 
-        if (wavelet_denoiser != nullptr)
-        {
-            wavelet_denoiser->Update(static_cast<PerspectiveCamera*>(m_camera.get()));
-        }
+		if (wavelet_denoiser != nullptr)
+		{
+			wavelet_denoiser->Update(static_cast<PerspectiveCamera*>(m_camera.get()));
+		}
 #endif
-        auto& scene = m_cfgs[m_primary].controller->GetCachedScene(m_scene);
-        m_cfgs[m_primary].renderer->Render(scene);
+		auto& scene = m_cfgs[m_primary].controller->GetCachedScene(m_scene);		
+		m_cfgs[m_primary].renderer->Render(scene);
 
-        if (m_shape_id_requested)
-        {
-            // offset in OpenCl memory till necessary item
-            auto offset = (std::uint32_t)(m_width * (m_height - m_shape_id_pos.y) + m_shape_id_pos.x);
-            // copy shape id elem from OpenCl
-            float4 shape_id;
-            m_shape_id_data.output->GetData((float3*)&shape_id, offset, 1);
-            m_promise.set_value(shape_id.x);
-            // clear output to stop tracking shape id map in openCl
-            m_cfgs[m_primary].renderer->SetOutput(Renderer::OutputType::kShapeId, nullptr);
-            m_shape_id_requested = false;
-        }
+		if (m_shape_id_requested)
+		{
+			// offset in OpenCl memory till necessary item
+			auto offset = (std::uint32_t)(m_width * (m_height - m_shape_id_pos.y) + m_shape_id_pos.x);
+			// copy shape id elem from OpenCl
+			float4 shape_id;
+			m_shape_id_data.output->GetData((float3*)&shape_id, offset, 1);
+			m_promise.set_value(shape_id.x);
+			// clear output to stop tracking shape id map in openCl
+			m_cfgs[m_primary].renderer->SetOutput(Renderer::OutputType::kShapeId, nullptr);
+			m_shape_id_requested = false;
+		}
+		
 
 #ifdef ENABLE_DENOISER
         Baikal::PostEffect::InputSet input_set;
