@@ -158,15 +158,13 @@ namespace Baikal
 
             if (m_cfgs[i].type == ConfigManager::kPrimary)
             {
-                m_outputs[i].copybuffer = m_cfgs[i].context.CreateBuffer<RadeonRays::float3>(m_width * m_height, CL_MEM_READ_WRITE);
+                m_outputs[i].copybuffer = m_cfgs[i].context.CreateBuffer<RadeonRays::float3>(m_width * m_height, CL_MEM_READ_WRITE);				
             }
         }
 
         m_shape_id_data.output = m_cfgs[m_primary].factory->CreateOutput(m_width, m_height);
         m_cfgs[m_primary].renderer->Clear(RadeonRays::float3(0, 0, 0), *m_outputs[m_primary].output);
-        m_cfgs[m_primary].renderer->Clear(RadeonRays::float3(0, 0, 0), *m_shape_id_data.output);
-
-		
+        m_cfgs[m_primary].renderer->Clear(RadeonRays::float3(0, 0, 0), *m_shape_id_data.output);		
     }
 
 
@@ -244,10 +242,28 @@ namespace Baikal
             std::cout << "Camera type: " << (perspective_camera->GetAperture() > 0.f ? "Physical" : "Pinhole") << "\n";
             std::cout << "Lens focal length: " << perspective_camera->GetFocalLength() * 1000.f << "mm\n";
             std::cout << "Lens focus distance: " << perspective_camera->GetFocusDistance() << "m\n";
-            std::cout << "F-Stop: " << 1.f / (perspective_camera->GetAperture() * 10.f) << "\n";
+            std::cout << "F-Stop: " << 1.f / (perspective_camera->GetAperture() * 10.f) << "\n";			
         }
 
         std::cout << "Sensor size: " << settings.camera_sensor_size.x * 1000.f << "x" << settings.camera_sensor_size.y * 1000.f << "mm\n";
+
+		std::cout << "World Box min: " << m_scene->GetWorldAABB().pmin[0] << " " << m_scene->GetWorldAABB().pmin[1] << " " << m_scene->GetWorldAABB().pmin[2] << "\n";
+		std::cout << "World Box max: " << m_scene->GetWorldAABB().pmax[0] << " " << m_scene->GetWorldAABB().pmax[1] << " " << m_scene->GetWorldAABB().pmax[2] << "\n";
+		
+		float3 voxel_extents = m_scene->GetWorldAABB().extents();
+		m_voxel_data.extents = int3((int)(voxel_extents[0] / settings.voxel_size) + 1, (int)(voxel_extents[1] / settings.voxel_size) + 1, (int)(voxel_extents[2] / settings.voxel_size) + 1);
+
+		std::cout << "World Box voxel: "
+			<< m_voxel_data.extents[0] << " "
+			<< m_voxel_data.extents[1] << " "
+			<< m_voxel_data.extents[2] << "\n";
+
+		m_voxel_data.orig = m_scene->GetWorldAABB().pmin;
+		m_voxel_data.color.resize(m_voxel_data.extents[0] * m_voxel_data.extents[1] * m_voxel_data.extents[2], float4(0.f));
+
+		std::cout << "Voxel size: "	<< m_voxel_data.color.size() << "\n";
+
+		m_voxel_data.color_buffer = m_cfgs[m_primary].context.CreateBuffer<RadeonRays::float4>(m_voxel_data.color.size(), CL_MEM_READ_WRITE);
     }
 
     void AppClRender::UpdateScene()
@@ -326,7 +342,7 @@ namespace Baikal
 			std::cout << settings.samplecount << "\n";
             glActiveTexture(GL_TEXTURE0);
             glBindTexture(GL_TEXTURE_2D, m_tex);
-            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 512, m_outputs[m_primary].output->width(), m_outputs[m_primary].output->height(), GL_RGBA, GL_UNSIGNED_BYTE, &m_outputs[m_primary].udata[0]);			
+            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_outputs[m_primary].output->width(), m_outputs[m_primary].output->height(), GL_RGBA, GL_UNSIGNED_BYTE, &m_outputs[m_primary].udata[0]);			
             glBindTexture(GL_TEXTURE_2D, 0);
 			
 			
@@ -339,25 +355,70 @@ namespace Baikal
 
             auto copykernel = static_cast<Baikal::MonteCarloRenderer*>(m_cfgs[m_primary].renderer.get())->GetCopyKernel();
 
+			m_cfgs[m_primary].context.WriteBuffer(0, m_voxel_data.color_buffer, &m_voxel_data.color[0], m_voxel_data.color.size());
+			
 #ifdef ENABLE_DENOISER
             auto output = m_outputs[m_primary].output_denoised.get();
 #else
             auto output = m_outputs[m_primary].output.get();
 			auto position_output = m_outputs[m_primary].output_position.get();
-			auto normal_output = m_outputs[m_primary].output_normal.get();
 #endif
-            int argc = 0;
+
+            int argc = 0;			
 
             copykernel.SetArg(argc++, static_cast<Baikal::ClwOutput*>(output)->data());
 			copykernel.SetArg(argc++, static_cast<Baikal::ClwOutput*>(position_output)->data());
-			copykernel.SetArg(argc++, static_cast<Baikal::ClwOutput*>(normal_output)->data());
             copykernel.SetArg(argc++, output->width());
             copykernel.SetArg(argc++, output->height());
             copykernel.SetArg(argc++, 2.2f);
             copykernel.SetArg(argc++, m_cl_interop_image);
 
-            int globalsize = output->width() * output->height();
+			int globalsize = output->width() * output->height();
+
             m_cfgs[m_primary].context.Launch1D(0, ((globalsize + 63) / 64) * 64, 64, copykernel);
+
+			if (settings.samplecount == 1) 
+			{
+				auto voxelkernel = static_cast<Baikal::MonteCarloRenderer*>(m_cfgs[m_primary].renderer.get())->GetVoxelComputeKernel();
+
+				argc = 0;
+
+				voxelkernel.SetArg(argc++, static_cast<Baikal::ClwOutput*>(output)->data());
+				voxelkernel.SetArg(argc++, static_cast<Baikal::ClwOutput*>(position_output)->data());
+				voxelkernel.SetArg(argc++, m_voxel_data.color_buffer);
+				voxelkernel.SetArg(argc++, m_voxel_data.orig[0]);
+				voxelkernel.SetArg(argc++, m_voxel_data.orig[1]);
+				voxelkernel.SetArg(argc++, m_voxel_data.orig[2]);
+				voxelkernel.SetArg(argc++, m_voxel_data.extents[0]);
+				voxelkernel.SetArg(argc++, m_voxel_data.extents[1]);
+				voxelkernel.SetArg(argc++, m_voxel_data.extents[2]);
+				voxelkernel.SetArg(argc++, settings.voxel_size);
+				voxelkernel.SetArg(argc++, output->width());
+				voxelkernel.SetArg(argc++, output->height());
+
+				m_cfgs[m_primary].context.Launch1D(0, ((globalsize + 63) / 64) * 64, 64, voxelkernel);
+
+				auto visualizationkernel = static_cast<Baikal::MonteCarloRenderer*>(m_cfgs[m_primary].renderer.get())->GetVoxelVisualizationKernel();
+
+				argc = 0;
+
+				visualizationkernel.SetArg(argc++, static_cast<Baikal::ClwOutput*>(position_output)->data());
+				visualizationkernel.SetArg(argc++, m_voxel_data.color_buffer);
+				visualizationkernel.SetArg(argc++, m_voxel_data.orig[0]);
+				visualizationkernel.SetArg(argc++, m_voxel_data.orig[1]);
+				visualizationkernel.SetArg(argc++, m_voxel_data.orig[2]);
+				visualizationkernel.SetArg(argc++, m_voxel_data.extents[0]);
+				visualizationkernel.SetArg(argc++, m_voxel_data.extents[1]);
+				visualizationkernel.SetArg(argc++, m_voxel_data.extents[2]);
+				visualizationkernel.SetArg(argc++, settings.voxel_size);
+				visualizationkernel.SetArg(argc++, output->width());
+				visualizationkernel.SetArg(argc++, output->height());
+				visualizationkernel.SetArg(argc++, 2.2f);
+				visualizationkernel.SetArg(argc++, m_cl_interop_image);
+
+				m_cfgs[m_primary].context.Launch1D(0, ((globalsize + 63) / 64) * 64, 64, visualizationkernel);
+
+			}
 
             m_cfgs[m_primary].context.ReleaseGLObjects(0, objects);
             m_cfgs[m_primary].context.Finish(0);

@@ -239,6 +239,9 @@ namespace Baikal
         , envmapmul(1.f)
         , platform_index(-1)
         , device_index(-1)
+
+		//Voxel
+		, voxel_size(0.05f)
     {
     }
 }

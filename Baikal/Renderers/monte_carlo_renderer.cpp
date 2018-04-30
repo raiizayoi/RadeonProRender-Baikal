@@ -348,6 +348,16 @@ namespace Baikal
         return GetKernel("AccumulateData");
     }
 
+	CLWKernel MonteCarloRenderer::GetVoxelComputeKernel()
+	{
+		return GetKernel("VoxelCompute");
+	}
+
+	CLWKernel MonteCarloRenderer::GetVoxelVisualizationKernel()
+	{
+		return GetKernel("VoxelVisualization");
+	}
+
     void MonteCarloRenderer::SetRandomSeed(std::uint32_t seed)
     {
         m_estimator->SetRandomSeed(seed);

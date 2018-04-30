@@ -967,7 +967,6 @@ KERNEL void AccumulateData(
 KERNEL void ApplyGammaAndCopyData(
     GLOBAL float4 const* data,
     GLOBAL float4 const* position_data,
-    GLOBAL float4 const* normal_data,
     int img_width,
     int img_height,
     float gamma,
@@ -982,22 +981,91 @@ KERNEL void ApplyGammaAndCopyData(
     if (global_idx < img_width && global_idy < img_height)
     {
         float4 v = data[global_id];
-        float4 v2 = position_data[global_id];
-        float4 v3 = normal_data[global_id];
 #ifdef ADAPTIVITY_DEBUG
         float a = v.w < 1024 ? min(1.f, v.w / 1024.f) : 0.f;
         float4 mul_color = make_float4(1.f, 1.f - a, 1.f - a, 1.f);
         v *= mul_color;
 #endif
-
         float4 val = clamp(native_powr(v / v.w, 1.f / gamma), 0.f, 1.f);
-        float4 val2 = clamp(native_powr(v2 / v2.w, 1.f / gamma), 0.f, 1.f);
-        float4 val3 = clamp(native_powr(v3 / v3.w, 1.f / gamma), 0.f, 1.f);
         write_imagef(img, make_int2(global_idx, global_idy), val);
-        write_imagef(img, make_int2(global_idx + 512, global_idy), val2);
-        write_imagef(img, make_int2(global_idx + 1024, global_idy), val3);
+
     }
 } 
+
+KERNEL void VoxelCompute(
+    GLOBAL float4 const* color_data,
+    GLOBAL float4 const* position_data,
+    GLOBAL float4* voxel_color_data,
+    float orig_x,
+    float orig_y,
+    float orig_z,
+    int extents_x,
+    int extents_y,
+    int extents_z,
+    float voxel_size,
+    int img_width,
+    int img_height
+)
+{
+    int global_id = get_global_id(0);
+
+    int global_idx = global_id % img_width;
+    int global_idy = global_id / img_width;
+
+    
+    float3 voxel_base_position = position_data[global_id].xyz - make_float3(orig_x, orig_y, orig_z);
+
+    int voxel_x = (int)(voxel_base_position.x / voxel_size);
+    int voxel_y = (int)(voxel_base_position.y / voxel_size);
+    int voxel_z = (int)(voxel_base_position.z / voxel_size);
+    if(voxel_x >= 0 && voxel_y >= 0 && voxel_z >= 0){
+        if (global_idx < img_width && global_idy < img_height && voxel_x < extents_x && voxel_y < extents_y && voxel_z < extents_z)
+        {       
+            long voxel_idx = voxel_x + voxel_y * extents_x + voxel_z * extents_x * extents_y;
+            float4 c = make_float4(color_data[global_id].x, color_data[global_id].y, color_data[global_id].z, 1.f);
+            atomic_add_float4(&voxel_color_data[voxel_idx], c);        
+        }
+    }
+}
+
+KERNEL void VoxelVisualization(
+    GLOBAL float4 const* position_data,
+    GLOBAL float4* voxel_color_data,
+    float orig_x,
+    float orig_y,
+    float orig_z,
+    int extents_x,
+    int extents_y,
+    int extents_z,
+    float voxel_size,
+    int img_width,
+    int img_height,
+    float gamma,
+    write_only image2d_t img
+)
+{
+    int global_id = get_global_id(0);
+
+    int global_idx = global_id % img_width;
+    int global_idy = global_id / img_width;
+
+    float3 voxel_base_position = position_data[global_id].xyz - make_float3(orig_x, orig_y, orig_z);
+    int voxel_x = (int)(voxel_base_position.x / voxel_size);
+    int voxel_y = (int)(voxel_base_position.y / voxel_size);
+    int voxel_z = (int)(voxel_base_position.z / voxel_size);
+
+    if(voxel_x >= 0 && voxel_y >= 0 && voxel_z >= 0){
+        if (global_idx < img_width && global_idy < img_height && voxel_x < extents_x && voxel_y < extents_y && voxel_z < extents_z)
+        {        
+            long voxel_idx = voxel_x + voxel_y * extents_x + voxel_z * extents_x * extents_y;
+            float3 voxel_color = voxel_color_data[voxel_idx].xyz / voxel_color_data[voxel_idx].w;
+            float4 c = make_float4(voxel_color.x, voxel_color.y, voxel_color.z, 1.f);        
+
+            float4 val2 = clamp(native_powr(c / c.w, 1.f / gamma), 0.f, 1.f);
+            write_imagef(img, make_int2(global_idx + 512, global_idy), val2);
+        }
+    }
+}
 
 KERNEL void AccumulateSingleSample(
     GLOBAL float4 const* restrict src_sample_data,

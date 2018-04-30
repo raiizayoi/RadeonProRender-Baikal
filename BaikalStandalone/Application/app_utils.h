@@ -91,6 +91,9 @@ namespace Baikal
         int num_shadow_rays;
         int samplecount;
         float envmapmul;
+
+		//voxel
+		float voxel_size;
     };
 
     class AppCliParser

@@ -74,6 +74,16 @@ namespace Baikal
             int idx;
         };
 
+		struct VoxelData
+		{
+			std::vector<float4> color;
+			float3 orig;
+			int3 extents;
+
+			CLWBuffer<float4> color_buffer;
+			
+		};
+
     public:
         AppClRender(AppSettings& settings, GLuint tex);
         //copy data from to GL
@@ -131,6 +141,8 @@ namespace Baikal
         //save GL tex for no interop case
         GLuint m_tex;
         Renderer::OutputType m_output_type;
+		
+		VoxelData m_voxel_data;
 
 		
     };

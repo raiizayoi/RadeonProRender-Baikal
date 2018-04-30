@@ -74,6 +74,10 @@ namespace Baikal
         CLWKernel GetCopyKernel();
         // Add function
         CLWKernel GetAccumulateKernel();
+
+		CLWKernel GetVoxelComputeKernel();
+		CLWKernel GetVoxelVisualizationKernel();
+
         // Run render benchmark
         void Benchmark(ClwScene const& scene, Estimator::RayTracingStats& stats);
 
