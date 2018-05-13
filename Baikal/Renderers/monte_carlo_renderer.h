@@ -77,6 +77,10 @@ namespace Baikal
 
 		CLWKernel GetVoxelComputeKernel();
 		CLWKernel GetVoxelVisualizationKernel();
+		CLWKernel GetVoxelMipmapKernel();
+		void SetVoxelCreated(int voxel_created) {
+			m_voxel_created = voxel_created;
+		}
 
         // Run render benchmark
         void Benchmark(ClwScene const& scene, Estimator::RayTracingStats& stats);
@@ -117,6 +121,8 @@ namespace Baikal
     public:
         std::unique_ptr<Estimator> m_estimator;
         mutable std::uint32_t m_sample_counter;
+
+		int m_voxel_created;
     };
 
 }

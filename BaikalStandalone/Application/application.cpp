@@ -88,6 +88,9 @@ namespace Baikal
     static float2   g_mouse_delta = float2(0, 0);
     static float2   g_scroll_delta = float2(0, 0);
 
+	static bool     g_is_pgup_pressed = false;
+	static bool     g_is_pgdn_pressed = false;
+
     auto start = std::chrono::high_resolution_clock::now();
 
     Application::MaterialSelector::MaterialSelector(Material::Ptr root) :
@@ -288,6 +291,12 @@ namespace Baikal
         case GLFW_KEY_F10:
             g_is_f10_pressed = action == GLFW_PRESS;
             break;
+		case GLFW_KEY_PAGE_UP:
+			g_is_pgup_pressed = action == GLFW_PRESS;
+			break;
+		case GLFW_KEY_PAGE_DOWN:
+			g_is_pgdn_pressed = action == GLFW_PRESS;
+			break;
         default:
             break;
         }
@@ -304,84 +313,141 @@ namespace Baikal
         float camrotx = 0.f;
         float camroty = 0.f;
 
-        const float kMouseSensitivity = 0.001125f;
-        const float kScrollSensitivity = 0.05f;
-        auto camera = m_cl->GetCamera();
-        if (!m_settings.benchmark && !m_settings.time_benchmark)
-        {
-            float2 delta = g_mouse_delta * float2(kMouseSensitivity, kMouseSensitivity);
-            float2 scroll_delta = g_scroll_delta * float2(kScrollSensitivity, kScrollSensitivity);
-            camrotx = -delta.x;
-            camroty = -delta.y;
+		if (m_settings.voxel_created < 1) {
+			float3 light_pos, light_at, light_up;
+			switch (m_settings.voxel_sample_count)
+			{
+				case 0:
+					light_pos = float3(-0.01f, 1.97f, -0.25f);
+					light_at = float3(0.f, 0.25f, -1.04f);
+					light_up = float3(0.f, 0.f, 1.f);
+					break;
+				/*case 1:
+					light_pos = float3(-0.01f, 1.97f, 0.5f);
+					light_at = float3(0.f, 0.5f, 0.99f);
+					light_up = float3(0.f, 1.f, 0.f);
+					break;*/
+				case 2:
+					light_pos = float3(0.25f, 1.97f, -0.03f);
+					light_at = float3(1.f, 0.5f, 0.f);
+					light_up = float3(0.f, 1.f, 0.f);
+					break;
+				case 3:
+					light_pos = float3(-0.25f, 1.97f, -0.03f);
+					light_at = float3(-1.f, 0.5f, 0.f);
+					light_up = float3(0.f, 1.f, 0.f);
+					break;
+				case 4:
+					light_pos = float3(-0.01f, 1.97f, 0.25f);
+					light_at = float3(0.f, 0.5f, 0.99f);
+					light_up = float3(0.f, 0.f, 1.f);
+					break;
+				/*case 5:
+					light_pos = float3(-0.75f, 1.25f, 0.f);
+					light_at = float3(-1.f, 0.5f, -1.f);
+					light_up = float3(0.f, 1.f, 0.f);
+					break;*/								
+			}
+			
+			auto light_camera = m_cl->GetCamera();
+			light_camera->LookAt(light_pos, light_at, light_up);
+		}
+		else {
+			const float kMouseSensitivity = 0.001125f;
+			const float kScrollSensitivity = 0.05f;
+			auto camera = m_cl->GetCamera();
+			if (!m_settings.benchmark && !m_settings.time_benchmark)
+			{
+				float2 delta = g_mouse_delta * float2(kMouseSensitivity, kMouseSensitivity);
+				float2 scroll_delta = g_scroll_delta * float2(kScrollSensitivity, kScrollSensitivity);
+				camrotx = -delta.x;
+				camroty = -delta.y;
 
-            if (std::abs(camroty) > 0.001f)
-            {
-                camera->Tilt(camroty);
-                update = true;
-            }
+				if (std::abs(camroty) > 0.001f)
+				{
+					camera->Tilt(camroty);
+					update = true;
+				}
 
-            if (std::abs(camrotx) > 0.001f)
-            {
+				if (std::abs(camrotx) > 0.001f)
+				{
 
-                camera->Rotate(camrotx);
-                update = true;
-            }
+					camera->Rotate(camrotx);
+					update = true;
+				}
 
-            const float kMovementSpeed = m_settings.cspeed;
-            if (std::abs(scroll_delta.y) > 0.001f)
-            {
-                camera->Zoom(scroll_delta.y * kMovementSpeed);
-                g_scroll_delta = float2();
-                update = true;
-            }
-            if (g_is_fwd_pressed)
-            {
-                camera->MoveForward((float)dt.count() * kMovementSpeed);
-                update = true;
-            }
+				const float kMovementSpeed = m_settings.cspeed;
+				if (std::abs(scroll_delta.y) > 0.001f)
+				{
+					camera->Zoom(scroll_delta.y * kMovementSpeed);
+					g_scroll_delta = float2();
+					update = true;
+				}
+				if (g_is_fwd_pressed)
+				{
+					camera->MoveForward((float)dt.count() * kMovementSpeed);
+					update = true;
+				}
 
-            if (g_is_back_pressed)
-            {
-                camera->MoveForward(-(float)dt.count() * kMovementSpeed);
-                update = true;
-            }
+				if (g_is_back_pressed)
+				{
+					camera->MoveForward(-(float)dt.count() * kMovementSpeed);
+					update = true;
+				}
 
-            if (g_is_right_pressed)
-            {
-                camera->MoveRight((float)dt.count() * kMovementSpeed);
-                update = true;
-            }
+				if (g_is_right_pressed)
+				{
+					camera->MoveRight((float)dt.count() * kMovementSpeed);
+					update = true;
+				}
 
-            if (g_is_left_pressed)
-            {
-                camera->MoveRight(-(float)dt.count() * kMovementSpeed);
-                update = true;
-            }
+				if (g_is_left_pressed)
+				{
+					camera->MoveRight(-(float)dt.count() * kMovementSpeed);
+					update = true;
+				}
 
-            if (g_is_climb_pressed)
-            {
-                camera->MoveUp((float)dt.count() * kMovementSpeed);
-                update = true;
-            }
+				if (g_is_climb_pressed)
+				{
+					camera->MoveUp((float)dt.count() * kMovementSpeed);
+					update = true;
+				}
 
-            if (g_is_descent_pressed)
-            {
-                camera->MoveUp(-(float)dt.count() * kMovementSpeed);
-                update = true;
-            }
+				if (g_is_descent_pressed)
+				{
+					camera->MoveUp(-(float)dt.count() * kMovementSpeed);
+					update = true;
+				}
 
-            if (g_is_f10_pressed)
-            {
-                g_is_f10_pressed = false; //one time execution
-                SaveToFile(time);
-            }
-        }
+				if (g_is_f10_pressed)
+				{
+					g_is_f10_pressed = false; //one time execution
+					SaveToFile(time);
+				}
 
+				if (g_is_pgup_pressed)
+				{
+					g_is_pgup_pressed = false; //one time execution
+					m_settings.voxel_mipmap_level--;
+					if (m_settings.voxel_mipmap_level < 0)
+						m_settings.voxel_mipmap_level = 0;
+				}
+
+				if (g_is_pgdn_pressed)
+				{
+					g_is_pgdn_pressed = false; //one time execution
+					m_settings.voxel_mipmap_level++;
+					if (m_settings.voxel_mipmap_level > log2(m_settings.voxel_size))
+						m_settings.voxel_mipmap_level = log2(m_settings.voxel_size);
+				}
+			}
+		}
         if (update)
         {
             //if (g_num_samples > -1)
             {
                 m_settings.samplecount = 0;
+				//m_settings.voxel_created = false;
             }
 
             m_cl->UpdateScene();
@@ -505,7 +571,7 @@ namespace Baikal
     #endif
 
             // GLUT Window Initialization:
-            m_window = glfwCreateWindow(m_settings.width * 3, m_settings.height, "Baikal standalone demo", nullptr, nullptr);
+            m_window = glfwCreateWindow(m_settings.width * 2, m_settings.height, "Baikal standalone demo", nullptr, nullptr);
             glfwMakeContextCurrent(m_window);
 
     #ifndef __APPLE__
@@ -728,7 +794,7 @@ namespace Baikal
         static float aperture = 0.0f;
         static float focal_length = 35.f;
         static float focus_distance = 1.f;
-        static int num_bounces = 5;
+        static int num_bounces = 1;
         static char const* outputs =
             "Color\0"
             "World position\0"

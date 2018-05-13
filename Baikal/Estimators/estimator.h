@@ -75,7 +75,7 @@ namespace Baikal
         
         Estimator(std::shared_ptr<RadeonRays::IntersectionApi> api)
             : m_intersector(api)
-            , m_max_bounces(5u)
+            , m_max_bounces(1u)
             , m_max_shadow_ray_transmission_steps(2u)
         {
         }

@@ -93,7 +93,12 @@ namespace Baikal
         float envmapmul;
 
 		//voxel
-		float voxel_size;
+		int voxel_size;
+		int voxel_sample;
+		int voxel_sample_count;
+		int voxel_created;
+		int voxel_mipmaped;
+		int voxel_mipmap_level;
     };
 
     class AppCliParser

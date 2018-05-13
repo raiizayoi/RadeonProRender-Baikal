@@ -6271,6 +6271,7 @@ void PerspectiveCamera_GeneratePaths(
     uint rng_seed,
     // Current frame
     uint frame,
+    int voxel_created,
     // Rays to generate
     GLOBAL ray* restrict rays,
     // RNG data
@@ -6324,11 +6325,17 @@ void PerspectiveCamera_GeneratePaths(
 
         // Transform into [-0.5, 0.5]
         float2 h_sample = img_sample - make_float2(0.5f, 0.5f);
-        // Transform into [-dim/2, dim/2]
-        float2 c_sample = h_sample * camera->dim;
+        if(voxel_created){
+            // Transform into [-dim/2, dim/2]
+            float2 c_sample = h_sample * camera->dim;
 
-        // Calculate direction to image plane
-        my_ray->d.xyz = normalize(camera->focal_length * camera->forward + c_sample.x * camera->right + c_sample.y * camera->up);
+            // Calculate direction to image plane
+            my_ray->d.xyz = normalize(camera->focal_length * camera->forward + c_sample.x * camera->right + c_sample.y * camera->up);
+        }
+        else{
+            float2 c_sample = h_sample * 2;
+            my_ray->d.xyz = normalize(camera->forward * 0.25f + c_sample.x * camera->right + c_sample.y * camera->up);
+        }
         // Origin == camera position + nearz * d
         my_ray->o.xyz = camera->p + camera->zcap.x * my_ray->d.xyz;
         // Max T value = zfar - znear since we moved origin to znear
@@ -7206,7 +7213,7 @@ KERNEL void ApplyGammaAndCopyData(
         write_imagef(img, make_int2(global_idx, global_idy), val);
 
     }
-} 
+}
 
 KERNEL void VoxelCompute(
     GLOBAL float4 const* color_data,
@@ -7215,10 +7222,8 @@ KERNEL void VoxelCompute(
     float orig_x,
     float orig_y,
     float orig_z,
-    int extents_x,
-    int extents_y,
-    int extents_z,
-    float voxel_size,
+    float unit_size,
+    int voxel_size,
     int img_width,
     int img_height
 )
@@ -7229,23 +7234,66 @@ KERNEL void VoxelCompute(
     int global_idy = global_id / img_width;
 
     
-    float3 voxel_base_position = position_data[global_id].xyz - make_float3(orig_x, orig_y, orig_z);
-
-    int voxel_x = (int)(voxel_base_position.x / voxel_size);
-    int voxel_y = (int)(voxel_base_position.y / voxel_size);
-    int voxel_z = (int)(voxel_base_position.z / voxel_size);
-    if(voxel_x > 0 && voxel_y > 0 && voxel_z > 0){
-        if (global_idx < img_width && global_idy < img_height && voxel_x < extents_x && voxel_y < extents_y && voxel_z < extents_z)
+    
+    if(global_idx < img_width && global_idy < img_height){
+        if (position_data[global_id].w > 0)
         {       
-            long voxel_idx = voxel_x * extents_x + voxel_y * extents_y + voxel_z - 1;
-            float4 c = make_float4(color_data[global_id].x, color_data[global_id].y, color_data[global_id].z, 1.f);
+            float4 pos = position_data[global_id];
+            float3 voxel_base_position = (pos.xyz / pos.w) - make_float3(orig_x, orig_y, orig_z);
+            int voxel_coord_x = (int)(voxel_base_position.x / unit_size);
+            int voxel_coord_y = (int)(voxel_base_position.y / unit_size);
+            int voxel_coord_z = (int)(voxel_base_position.z / unit_size);
+
+            long voxel_idx = voxel_coord_x + voxel_coord_y * voxel_size + voxel_coord_z * voxel_size * voxel_size;
+            float4 color = color_data[global_id] / color_data[global_id].w;
+            float4 c = make_float4(color.x, color.y, color.z, 1.f);
             atomic_add_float4(&voxel_color_data[voxel_idx], c);        
         }
     }
 }
 
-bool Isinbox(float3 p){
+KERNEL void VoxelMipmap(
+    GLOBAL float4 const* mipmap_l0,
+    int l0_voxelsize,
+    GLOBAL float4* mipmap_l1,
+    int l1_voxelsize,
+    int target_level
+)
+{
+    int global_id = get_global_id(0);
+
     
+    int voxel_coord_x = global_id % l1_voxelsize;
+    int voxel_coord_y = global_id % (l1_voxelsize * l1_voxelsize) / l1_voxelsize;
+    int voxel_coord_z = global_id / (l1_voxelsize * l1_voxelsize);
+
+    if(voxel_coord_x < l1_voxelsize && voxel_coord_y < l1_voxelsize && voxel_coord_z < l1_voxelsize)
+    {
+        if(target_level == 0){
+            mipmap_l1[global_id] = mipmap_l0[global_id] / mipmap_l0[global_id].w;
+            return;
+        }
+
+        float4 l1_color = make_float4(0.f, 0.f, 0.f, 0.f);
+        int l0_idx0 = (voxel_coord_x * 2 + 1) + (voxel_coord_2 * 2 + 1) * l0_voxelsize + (voxel_coord_z * 2 + 1) * l0_voxelsize * l0_voxelsize;
+        int l0_idx1 = (voxel_coord_x * 2 + 2) + (voxel_coord_2 * 2 + 1) * l0_voxelsize + (voxel_coord_z * 2 + 1) * l0_voxelsize * l0_voxelsize;
+        int l0_idx2 = (voxel_coord_x * 2 + 1) + (voxel_coord_2 * 2 + 2) * l0_voxelsize + (voxel_coord_z * 2 + 1) * l0_voxelsize * l0_voxelsize;
+        int l0_idx3 = (voxel_coord_x * 2 + 2) + (voxel_coord_2 * 2 + 2) * l0_voxelsize + (voxel_coord_z * 2 + 1) * l0_voxelsize * l0_voxelsize;
+        int l0_idx4 = (voxel_coord_x * 2 + 1) + (voxel_coord_2 * 2 + 1) * l0_voxelsize + (voxel_coord_z * 2 + 2) * l0_voxelsize * l0_voxelsize;
+        int l0_idx5 = (voxel_coord_x * 2 + 2) + (voxel_coord_2 * 2 + 1) * l0_voxelsize + (voxel_coord_z * 2 + 2) * l0_voxelsize * l0_voxelsize;
+        int l0_idx6 = (voxel_coord_x * 2 + 1) + (voxel_coord_2 * 2 + 2) * l0_voxelsize + (voxel_coord_z * 2 + 2) * l0_voxelsize * l0_voxelsize;
+        int l0_idx7 = (voxel_coord_x * 2 + 2) + (voxel_coord_2 * 2 + 2) * l0_voxelsize + (voxel_coord_z * 2 + 2) * l0_voxelsize * l0_voxelsize;
+        mipmap_l1[global_id] = mipmap_l0[l0_idx0];
+        /*mipmap_l1[global_id] += mipmap_l0[l0_idx1];
+        mipmap_l1[global_id] += mipmap_l0[l0_idx2];
+        mipmap_l1[global_id] += mipmap_l0[l0_idx3];
+        mipmap_l1[global_id] += mipmap_l0[l0_idx4];
+        mipmap_l1[global_id] += mipmap_l0[l0_idx5];
+        mipmap_l1[global_id] += mipmap_l0[l0_idx6];
+        mipmap_l1[global_id] += mipmap_l0[l0_idx7];*/
+        
+        //mipmap_l1[global_id] = make_float4(1.f, 0.f, 0.f, 1.f);
+    }
 }
 
 KERNEL void VoxelVisualization(
@@ -7254,10 +7302,8 @@ KERNEL void VoxelVisualization(
     float orig_x,
     float orig_y,
     float orig_z,
-    int extents_x,
-    int extents_y,
-    int extents_z,
-    float voxel_size,
+    float unit_size,
+    int voxel_size,
     int img_width,
     int img_height,
     float gamma,
@@ -7269,26 +7315,30 @@ KERNEL void VoxelVisualization(
     int global_idx = global_id % img_width;
     int global_idy = global_id / img_width;
 
-    float3 voxel_base_position = position_data[global_id].xyz - make_float3(orig_x, orig_y, orig_z);
-    int voxel_x = (int)(voxel_base_position.x / voxel_size);
-    int voxel_y = (int)(voxel_base_position.y / voxel_size);
-    int voxel_z = (int)(voxel_base_position.z / voxel_size);
+    float4 pos = position_data[global_id];
 
-    if(voxel_x > 0 && voxel_y > 0 && voxel_z > 0){
-        if (global_idx < img_width && global_idy < img_height && voxel_x < extents_x && voxel_y < extents_y && voxel_z < extents_z)
-        {        
-            long voxel_idx = voxel_x * extents_x + voxel_y * extents_y + voxel_z - 1;
-            float3 voxel_color = voxel_color_data[voxel_idx].xyz / voxel_color_data[voxel_idx].w;
-            float4 c = make_float4(voxel_color.x, voxel_color.y, voxel_color.z, 1.f);        
-
-            float4 val2 = clamp(native_powr(c / c.w, 1.f / gamma), 0.f, 1.f);
-            write_imagef(img, make_int2(global_idx + 512, global_idy), val2);
+   if(global_idx < img_width && global_idy < img_height){
+        if (position_data[global_id].w > 0)
+        {   
+            float3 voxel_base_position = (pos.xyz / pos.w) - make_float3(orig_x, orig_y, orig_z);
+            
+            int voxel_coord_x = (int)(voxel_base_position.x / unit_size);
+            int voxel_coord_y = (int)(voxel_base_position.y / unit_size);
+            int voxel_coord_z = (int)(voxel_base_position.z / unit_size);
+            float4 v2 = make_float4((float)voxel_coord_x / voxel_size, (float)voxel_coord_y / voxel_size, (float)voxel_coord_z / voxel_size, 1.f);
+            int voxel_idx = voxel_coord_x + voxel_coord_y * voxel_size + voxel_coord_z * voxel_size * voxel_size;
+            
+            float4 c = voxel_color_data[voxel_idx]; 
+            float4 val = clamp(native_powr(c / c.w, 1.f / gamma), 0.f, 1.f);
+            write_imagef(img, make_int2(global_idx + 512, global_idy), val);
+            
         }
-    }
-    else{
-        write_imagef(img, make_int2(global_idx + 512, global_idy), make_float4(0.f));
+        else
+            write_imagef(img, make_int2(global_idx + 512, global_idy), make_float4(0.f, 0.f, 0.f, 1.f));
+        
     }
 }
+
 
 KERNEL void AccumulateSingleSample(
     GLOBAL float4 const* restrict src_sample_data,

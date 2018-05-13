@@ -328,6 +328,7 @@ namespace Baikal
         genkernel.SetArg(argc++, m_estimator->GetRayCountBuffer());
         genkernel.SetArg(argc++, (int)rand_uint());
         genkernel.SetArg(argc++, m_sample_counter);
+		genkernel.SetArg(argc++, m_voxel_created);
         genkernel.SetArg(argc++, m_estimator->GetRayBuffer());
         genkernel.SetArg(argc++, m_estimator->GetRandomBuffer(Estimator::RandomBufferType::kRandomSeed));
         genkernel.SetArg(argc++, m_estimator->GetRandomBuffer(Estimator::RandomBufferType::kSobolLUT));
@@ -356,6 +357,11 @@ namespace Baikal
 	CLWKernel MonteCarloRenderer::GetVoxelVisualizationKernel()
 	{
 		return GetKernel("VoxelVisualization");
+	}
+
+	CLWKernel MonteCarloRenderer::GetVoxelMipmapKernel()
+	{
+		return GetKernel("VoxelMipmap");
 	}
 
     void MonteCarloRenderer::SetRandomSeed(std::uint32_t seed)

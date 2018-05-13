@@ -78,10 +78,11 @@ namespace Baikal
 		{
 			std::vector<float4> color;
 			float3 orig;
-			int3 extents;
+			float unit_size;
 
 			CLWBuffer<float4> color_buffer;
-			
+			std::vector<CLWBuffer<float4>> mipmap_buffers;
+			cl_mem voxel_texture;
 		};
 
     public:

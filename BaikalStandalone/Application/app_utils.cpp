@@ -197,7 +197,7 @@ namespace Baikal
         //render
         , width(512)
         , height(512)
-        , num_bounces(5)
+        , num_bounces(1)
         , num_samples(-1)
         , interop(true)
         , cspeed(10.25f)
@@ -241,7 +241,12 @@ namespace Baikal
         , device_index(-1)
 
 		//Voxel
-		, voxel_size(0.05f)
+		, voxel_size(128)
+		, voxel_created(0)
+		, voxel_sample(6)
+		, voxel_sample_count(0)
+		, voxel_mipmaped(0)
+		, voxel_mipmap_level(0)
     {
     }
 }

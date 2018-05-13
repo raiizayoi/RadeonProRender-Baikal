@@ -251,19 +251,43 @@ namespace Baikal
 		std::cout << "World Box max: " << m_scene->GetWorldAABB().pmax[0] << " " << m_scene->GetWorldAABB().pmax[1] << " " << m_scene->GetWorldAABB().pmax[2] << "\n";
 		
 		float3 voxel_extents = m_scene->GetWorldAABB().extents();
-		m_voxel_data.extents = int3((int)(voxel_extents[0] / settings.voxel_size) + 1, (int)(voxel_extents[1] / settings.voxel_size) + 1, (int)(voxel_extents[2] / settings.voxel_size) + 1);
+		float max_extent = std::max(voxel_extents[0], std::max(voxel_extents[1], voxel_extents[2]));
 
-		std::cout << "World Box voxel: "
-			<< m_voxel_data.extents[0] << " "
-			<< m_voxel_data.extents[1] << " "
-			<< m_voxel_data.extents[2] << "\n";
-
+		m_voxel_data.unit_size = max_extent / settings.voxel_size;
 		m_voxel_data.orig = m_scene->GetWorldAABB().pmin;
-		m_voxel_data.color.resize(m_voxel_data.extents[0] * m_voxel_data.extents[1] * m_voxel_data.extents[2], float4(0.f));
+		m_voxel_data.color.resize(std::pow(settings.voxel_size, 3), float4(0.f));
 
 		std::cout << "Voxel size: "	<< m_voxel_data.color.size() << "\n";
+		std::cout << "Voxel unit size: " << m_voxel_data.unit_size << "\n";
 
 		m_voxel_data.color_buffer = m_cfgs[m_primary].context.CreateBuffer<RadeonRays::float4>(m_voxel_data.color.size(), CL_MEM_READ_WRITE);
+		static_cast<Baikal::MonteCarloRenderer*>(m_cfgs[m_primary].renderer.get())->SetVoxelCreated(settings.voxel_created);
+
+		std::cout << "Mipmap Level: " << log2f(settings.voxel_size) << "\n";
+		for (int i = 0; i <= log2f(settings.voxel_size); i++) {
+			CLWBuffer<float4> mipmap_buffer = m_cfgs[m_primary].context.CreateBuffer<RadeonRays::float4>(std::pow(settings.voxel_size/ std::pow(2, i), 3), CL_MEM_READ_WRITE);
+			m_voxel_data.mipmap_buffers.push_back(mipmap_buffer);
+		}
+		std::cout << "Mipmap Level: " << m_voxel_data.mipmap_buffers.size() << "\n";
+		/*cl_int errNum;
+		cl_image_format clImageFormat;
+		clImageFormat.image_channel_order = CL_RGBA;
+		clImageFormat.image_channel_data_type = CL_FLOAT;
+
+		cl_image_desc clImageDesc;
+		clImageDesc.image_type = CL_MEM_OBJECT_IMAGE3D;
+		clImageDesc.image_width = settings.voxel_size;
+		clImageDesc.image_height = settings.voxel_size;
+		clImageDesc.image_depth = settings.voxel_size;
+		clImageDesc.image_row_pitch = 0;
+		clImageDesc.image_slice_pitch = 0;
+		clImageDesc.num_mip_levels = 3;
+		clImageDesc.num_samples = 0;
+		clImageDesc.buffer = NULL;	
+
+		m_voxel_data.voxel_texture = clCreateImage(m_cfgs[m_primary].context, CL_MEM_READ_WRITE, &clImageFormat, &clImageDesc, nullptr, &errNum);	*/	
+		
+
     }
 
     void AppClRender::UpdateScene()
@@ -339,7 +363,7 @@ namespace Baikal
                 m_outputs[m_primary].udata[4 * i + 3] = 1;
             }
 			
-			std::cout << settings.samplecount << "\n";
+			
             glActiveTexture(GL_TEXTURE0);
             glBindTexture(GL_TEXTURE_2D, m_tex);
             glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_outputs[m_primary].output->width(), m_outputs[m_primary].output->height(), GL_RGBA, GL_UNSIGNED_BYTE, &m_outputs[m_primary].udata[0]);			
@@ -354,8 +378,9 @@ namespace Baikal
             m_cfgs[m_primary].context.AcquireGLObjects(0, objects);
 
             auto copykernel = static_cast<Baikal::MonteCarloRenderer*>(m_cfgs[m_primary].renderer.get())->GetCopyKernel();
-
-			m_cfgs[m_primary].context.WriteBuffer(0, m_voxel_data.color_buffer, &m_voxel_data.color[0], m_voxel_data.color.size());
+			auto voxelkernel = static_cast<Baikal::MonteCarloRenderer*>(m_cfgs[m_primary].renderer.get())->GetVoxelComputeKernel();
+			auto visualizationkernel = static_cast<Baikal::MonteCarloRenderer*>(m_cfgs[m_primary].renderer.get())->GetVoxelVisualizationKernel();
+			auto mipmapkernel = static_cast<Baikal::MonteCarloRenderer*>(m_cfgs[m_primary].renderer.get())->GetVoxelMipmapKernel();
 			
 #ifdef ENABLE_DENOISER
             auto output = m_outputs[m_primary].output_denoised.get();
@@ -377,9 +402,10 @@ namespace Baikal
 
             m_cfgs[m_primary].context.Launch1D(0, ((globalsize + 63) / 64) * 64, 64, copykernel);
 
-			if (settings.samplecount == 1) 
-			{
-				auto voxelkernel = static_cast<Baikal::MonteCarloRenderer*>(m_cfgs[m_primary].renderer.get())->GetVoxelComputeKernel();
+			if (settings.samplecount == 50 && !settings.voxel_created) {
+
+				//m_voxel_data.color.resize(std::pow(settings.voxel_size, 3), float4(0.f));
+				m_cfgs[m_primary].context.WriteBuffer(0, m_voxel_data.color_buffer, &m_voxel_data.color[0], m_voxel_data.color.size());
 
 				argc = 0;
 
@@ -389,36 +415,79 @@ namespace Baikal
 				voxelkernel.SetArg(argc++, m_voxel_data.orig[0]);
 				voxelkernel.SetArg(argc++, m_voxel_data.orig[1]);
 				voxelkernel.SetArg(argc++, m_voxel_data.orig[2]);
-				voxelkernel.SetArg(argc++, m_voxel_data.extents[0]);
-				voxelkernel.SetArg(argc++, m_voxel_data.extents[1]);
-				voxelkernel.SetArg(argc++, m_voxel_data.extents[2]);
+				voxelkernel.SetArg(argc++, m_voxel_data.unit_size);
 				voxelkernel.SetArg(argc++, settings.voxel_size);
 				voxelkernel.SetArg(argc++, output->width());
 				voxelkernel.SetArg(argc++, output->height());
 
+				globalsize = output->width() * output->height();
+
 				m_cfgs[m_primary].context.Launch1D(0, ((globalsize + 63) / 64) * 64, 64, voxelkernel);
-
-				auto visualizationkernel = static_cast<Baikal::MonteCarloRenderer*>(m_cfgs[m_primary].renderer.get())->GetVoxelVisualizationKernel();
-
-				argc = 0;
-
-				visualizationkernel.SetArg(argc++, static_cast<Baikal::ClwOutput*>(position_output)->data());
-				visualizationkernel.SetArg(argc++, m_voxel_data.color_buffer);
-				visualizationkernel.SetArg(argc++, m_voxel_data.orig[0]);
-				visualizationkernel.SetArg(argc++, m_voxel_data.orig[1]);
-				visualizationkernel.SetArg(argc++, m_voxel_data.orig[2]);
-				visualizationkernel.SetArg(argc++, m_voxel_data.extents[0]);
-				visualizationkernel.SetArg(argc++, m_voxel_data.extents[1]);
-				visualizationkernel.SetArg(argc++, m_voxel_data.extents[2]);
-				visualizationkernel.SetArg(argc++, settings.voxel_size);
-				visualizationkernel.SetArg(argc++, output->width());
-				visualizationkernel.SetArg(argc++, output->height());
-				visualizationkernel.SetArg(argc++, 2.2f);
-				visualizationkernel.SetArg(argc++, m_cl_interop_image);
-
-				m_cfgs[m_primary].context.Launch1D(0, ((globalsize + 63) / 64) * 64, 64, visualizationkernel);
-
+				m_cfgs[m_primary].context.ReadBuffer(0, m_voxel_data.color_buffer, &m_voxel_data.color[0], m_voxel_data.color.size());
+				
+				settings.voxel_sample_count++;
+				
+				if (settings.voxel_sample_count == settings.voxel_sample) {
+					settings.voxel_created = 1;
+					m_camera->LookAt(settings.camera_pos
+						, settings.camera_at
+						, settings.camera_up);
+					static_cast<Baikal::MonteCarloRenderer*>(m_cfgs[m_primary].renderer.get())->SetVoxelCreated(settings.voxel_created);
+				}
+				UpdateScene();
+				settings.samplecount = 0;
 			}
+				
+			if (settings.voxel_created) {
+				
+				if (!settings.voxel_mipmaped) {
+					for (int i = 0; i < m_voxel_data.mipmap_buffers.size(); i++) {
+						std::cout << "Create Mipmap Level: " << i << "\n";
+						argc = 0;
+						if (i == 0) {
+							mipmapkernel.SetArg(argc++, m_voxel_data.color_buffer);
+							mipmapkernel.SetArg(argc++, settings.voxel_size);
+						}
+						else {
+							mipmapkernel.SetArg(argc++, m_voxel_data.mipmap_buffers[i - 1]);
+							mipmapkernel.SetArg(argc++, (int)(settings.voxel_size / std::pow(2, i - 1)));
+						}
+						mipmapkernel.SetArg(argc++, m_voxel_data.mipmap_buffers[i]);
+						mipmapkernel.SetArg(argc++, (int)(settings.voxel_size / std::pow(2, i)));
+						mipmapkernel.SetArg(argc++, i);
+
+						globalsize = std::pow(settings.voxel_size / std::pow(2, i), 3);
+						std::cout << globalsize << "\n";
+
+						m_cfgs[m_primary].context.Launch1D(0, ((globalsize + 63) / 64) * 64, 64, mipmapkernel);
+
+					}
+					settings.voxel_mipmaped = 1;
+				}
+				if (settings.voxel_mipmaped) {
+					argc = 0;
+					int mipmap_level = settings.voxel_mipmap_level;
+					float level_unit = m_voxel_data.unit_size * pow(2, mipmap_level);
+					int level_voxel_size = settings.voxel_size / pow(2, mipmap_level);
+					//std::cout << level_unit << " " << level_voxel_size << "\n";
+					
+					visualizationkernel.SetArg(argc++, static_cast<Baikal::ClwOutput*>(position_output)->data());
+					visualizationkernel.SetArg(argc++, m_voxel_data.mipmap_buffers[mipmap_level]);
+					visualizationkernel.SetArg(argc++, m_voxel_data.orig[0]);
+					visualizationkernel.SetArg(argc++, m_voxel_data.orig[1]);
+					visualizationkernel.SetArg(argc++, m_voxel_data.orig[2]);
+					visualizationkernel.SetArg(argc++, level_unit);
+					visualizationkernel.SetArg(argc++, level_voxel_size);
+					visualizationkernel.SetArg(argc++, output->width());
+					visualizationkernel.SetArg(argc++, output->height());
+					visualizationkernel.SetArg(argc++, 2.2f);
+					visualizationkernel.SetArg(argc++, m_cl_interop_image);
+
+					globalsize = output->width() * output->height();
+
+					m_cfgs[m_primary].context.Launch1D(0, ((globalsize + 63) / 64) * 64, 64, visualizationkernel);
+				}
+			}		
 
             m_cfgs[m_primary].context.ReleaseGLObjects(0, objects);
             m_cfgs[m_primary].context.Finish(0);
