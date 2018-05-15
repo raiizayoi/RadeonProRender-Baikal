@@ -571,7 +571,7 @@ namespace Baikal
     #endif
 
             // GLUT Window Initialization:
-            m_window = glfwCreateWindow(m_settings.width * 2, m_settings.height, "Baikal standalone demo", nullptr, nullptr);
+            m_window = glfwCreateWindow(m_settings.width * 3, m_settings.height, "Baikal standalone demo", nullptr, nullptr);
             glfwMakeContextCurrent(m_window);
 
     #ifndef __APPLE__

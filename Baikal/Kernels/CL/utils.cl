@@ -62,6 +62,15 @@ int2 make_int2(int x, int y)
     res.y = y;
     return res;
 }
+
+int3 make_int3(int x, int y, int z)
+{
+	int3 res;
+	res.x = x;
+	res.y = y;
+	res.z = z;
+	return res;
+}
 #endif
 
 matrix4x4 matrix_from_cols(float4 c0, float4 c1, float4 c2, float4 c3)

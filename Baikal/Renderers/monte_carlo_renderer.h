@@ -78,6 +78,7 @@ namespace Baikal
 		CLWKernel GetVoxelComputeKernel();
 		CLWKernel GetVoxelVisualizationKernel();
 		CLWKernel GetVoxelMipmapKernel();
+		CLWKernel GetVoxelConeTracingKernel();
 		void SetVoxelCreated(int voxel_created) {
 			m_voxel_created = voxel_created;
 		}

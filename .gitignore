@@ -22,3 +22,5 @@
 */OutputImages/*
 */ReferenceImages/*
 */cache/*.bin
+*.suo
+*.failed

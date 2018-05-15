@@ -364,6 +364,11 @@ namespace Baikal
 		return GetKernel("VoxelMipmap");
 	}
 
+	CLWKernel MonteCarloRenderer::GetVoxelConeTracingKernel()
+	{
+		return GetKernel("VoxelConeTracing");
+	}
+
     void MonteCarloRenderer::SetRandomSeed(std::uint32_t seed)
     {
         m_estimator->SetRandomSeed(seed);

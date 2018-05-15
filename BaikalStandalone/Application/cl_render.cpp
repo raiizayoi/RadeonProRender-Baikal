@@ -381,18 +381,21 @@ namespace Baikal
 			auto voxelkernel = static_cast<Baikal::MonteCarloRenderer*>(m_cfgs[m_primary].renderer.get())->GetVoxelComputeKernel();
 			auto visualizationkernel = static_cast<Baikal::MonteCarloRenderer*>(m_cfgs[m_primary].renderer.get())->GetVoxelVisualizationKernel();
 			auto mipmapkernel = static_cast<Baikal::MonteCarloRenderer*>(m_cfgs[m_primary].renderer.get())->GetVoxelMipmapKernel();
+			auto voxelconetracingkernel = static_cast<Baikal::MonteCarloRenderer*>(m_cfgs[m_primary].renderer.get())->GetVoxelConeTracingKernel();
 			
 #ifdef ENABLE_DENOISER
             auto output = m_outputs[m_primary].output_denoised.get();
 #else
             auto output = m_outputs[m_primary].output.get();
 			auto position_output = m_outputs[m_primary].output_position.get();
+			auto normal_output = m_outputs[m_primary].output_normal.get();
 #endif
 
             int argc = 0;			
 
             copykernel.SetArg(argc++, static_cast<Baikal::ClwOutput*>(output)->data());
 			copykernel.SetArg(argc++, static_cast<Baikal::ClwOutput*>(position_output)->data());
+			copykernel.SetArg(argc++, static_cast<Baikal::ClwOutput*>(normal_output)->data());
             copykernel.SetArg(argc++, output->width());
             copykernel.SetArg(argc++, output->height());
             copykernel.SetArg(argc++, 2.2f);
@@ -465,6 +468,39 @@ namespace Baikal
 					settings.voxel_mipmaped = 1;
 				}
 				if (settings.voxel_mipmaped) {
+					
+					argc = 0;
+
+					voxelconetracingkernel.SetArg(argc++, static_cast<Baikal::ClwOutput*>(output)->data());
+					voxelconetracingkernel.SetArg(argc++, static_cast<Baikal::ClwOutput*>(position_output)->data());
+					voxelconetracingkernel.SetArg(argc++, static_cast<Baikal::ClwOutput*>(normal_output)->data());
+					voxelconetracingkernel.SetArg(argc++, log2f(settings.voxel_size));
+					voxelconetracingkernel.SetArg(argc++, m_voxel_data.orig[0]);
+					voxelconetracingkernel.SetArg(argc++, m_voxel_data.orig[1]);
+					voxelconetracingkernel.SetArg(argc++, m_voxel_data.orig[2]);
+					for (int i = 0; i < 8; i++) {
+						if (i < m_voxel_data.mipmap_buffers.size()) {
+							voxelconetracingkernel.SetArg(argc++, m_voxel_data.mipmap_buffers[i]);
+							voxelconetracingkernel.SetArg(argc++, float(m_voxel_data.unit_size * pow(2, i)));
+							voxelconetracingkernel.SetArg(argc++, int(settings.voxel_size / pow(2, i)));
+						}
+						else {
+
+							voxelconetracingkernel.SetArg(argc++, nullptr);
+							voxelconetracingkernel.SetArg(argc++, 0.f);
+							voxelconetracingkernel.SetArg(argc++, 0);
+						}
+					}
+					voxelconetracingkernel.SetArg(argc++, output->width());
+					voxelconetracingkernel.SetArg(argc++, output->height());
+					voxelconetracingkernel.SetArg(argc++, 2.2f);
+					voxelconetracingkernel.SetArg(argc++, m_cl_interop_image);
+
+					globalsize = output->width() * output->height();
+
+					m_cfgs[m_primary].context.Launch1D(0, ((globalsize + 63) / 64) * 64, 64, voxelconetracingkernel);
+
+					//Voxel Visualization
 					argc = 0;
 					int mipmap_level = settings.voxel_mipmap_level;
 					float level_unit = m_voxel_data.unit_size * pow(2, mipmap_level);
