@@ -24,3 +24,4 @@
 */cache/*.bin
 *.suo
 *.failed
+.vs/Baikal/v14/.suo

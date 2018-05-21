@@ -50,6 +50,7 @@ namespace Baikal
 
 			std::unique_ptr<Baikal::Output> output_position;
 			std::unique_ptr<Baikal::Output> output_normal;
+			std::unique_ptr<Baikal::Output> output_albedo;
 
 #ifdef ENABLE_DENOISER
             std::unique_ptr<Baikal::Output> output_position;
@@ -96,11 +97,14 @@ namespace Baikal
         void Render(int sample_cnt);
         void StartRenderThreads();
         void StopRenderThreads();
-        void RunBenchmark(AppSettings& settings);
+        void RunBenchmark(AppSettings& settings);		
 
         //save cl frame buffer to file
         void SaveFrameBuffer(AppSettings& settings);
         void SaveImage(const std::string& name, int width, int height, const RadeonRays::float3* data);
+
+		void SaveVoxelData(std::string modelname);
+		void LoadVoxelData(std::string dataname);
 
         inline Baikal::Camera::Ptr GetCamera() { return m_camera; };
         inline Baikal::Scene1::Ptr GetScene() { return m_scene; };

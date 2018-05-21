@@ -241,12 +241,16 @@ namespace Baikal
         , device_index(-1)
 
 		//Voxel
+		, voxel_enabled(1)
 		, voxel_size(64)
 		, voxel_created(0)
 		, voxel_sample(6)
 		, voxel_sample_count(0)
 		, voxel_mipmaped(0)
 		, voxel_mipmap_level(0)
+		, voxel_catch(0)
+		, voxel_visualized(0)
+		, voxel_conetracing_enabled(1)
     {
     }
 }

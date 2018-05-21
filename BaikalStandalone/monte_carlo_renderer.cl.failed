@@ -675,6 +675,15 @@ int2 make_int2(int x, int y)
     res.y = y;
     return res;
 }
+
+int3 make_int3(int x, int y, int z)
+{
+	int3 res;
+	res.x = x;
+	res.y = y;
+	res.z = z;
+	return res;
+}
 #endif
 
 matrix4x4 matrix_from_cols(float4 c0, float4 c1, float4 c2, float4 c3)
@@ -6254,6 +6263,8 @@ void PathVertex_Init(
 #endif
 
 
+#pragma OPENCL EXTENSION cl_khr_mipmap_image : enable
+#pragma OPENCL EXTENSION cl_khr_mipmap_image_writes : enable
 // Pinhole camera implementation.
 // This kernel is being used if aperture value = 0.
 KERNEL
@@ -6320,9 +6331,15 @@ void PerspectiveCamera_GeneratePaths(
 
         // Calculate [0..1] image plane sample
         float2 img_sample;
-        img_sample.x = (float)x / output_width + sample0.x / output_width;
-        img_sample.y = (float)y / output_height + sample0.y / output_height;
 
+        if(voxel_created){
+            img_sample.x = (float)x / output_width + sample0.x / output_width;
+            img_sample.y = (float)y / output_height + sample0.y / output_height;
+        }
+        else{
+            img_sample.x = (float)x / output_width;
+            img_sample.y = (float)y / output_height;
+        }
         // Transform into [-0.5, 0.5]
         float2 h_sample = img_sample - make_float2(0.5f, 0.5f);
         if(voxel_created){
@@ -7190,6 +7207,7 @@ KERNEL void AccumulateData(
 KERNEL void ApplyGammaAndCopyData(
     GLOBAL float4 const* data,
     GLOBAL float4 const* position_data,
+    GLOBAL float4 const* normal_data,    
     int img_width,
     int img_height,
     float gamma,
@@ -7213,6 +7231,14 @@ KERNEL void ApplyGammaAndCopyData(
         write_imagef(img, make_int2(global_idx, global_idy), val);
 
     }
+}
+
+int3 VoxelCoord(float3 p, float unitsize){
+    int3 voxel_coord;
+    voxel_coord.x = (int)(p.x / unitsize);
+    voxel_coord.y = (int)(p.y / unitsize);
+    voxel_coord.z = (int)(p.z / unitsize);
+    return voxel_coord;
 }
 
 KERNEL void VoxelCompute(
@@ -7240,11 +7266,9 @@ KERNEL void VoxelCompute(
         {       
             float4 pos = position_data[global_id];
             float3 voxel_base_position = (pos.xyz / pos.w) - make_float3(orig_x, orig_y, orig_z);
-            int voxel_coord_x = (int)(voxel_base_position.x / unit_size);
-            int voxel_coord_y = (int)(voxel_base_position.y / unit_size);
-            int voxel_coord_z = (int)(voxel_base_position.z / unit_size);
 
-            long voxel_idx = voxel_coord_x + voxel_coord_y * voxel_size + voxel_coord_z * voxel_size * voxel_size;
+            int3 voxel_coord = VoxelCoord(voxel_base_position, unit_size);
+            int voxel_idx = voxel_coord.x + voxel_coord.y * voxel_size + voxel_coord.z * voxel_size * voxel_size;
             float4 color = color_data[global_id] / color_data[global_id].w;
             float4 c = make_float4(color.x, color.y, color.z, 1.f);
             atomic_add_float4(&voxel_color_data[voxel_idx], c);        
@@ -7270,29 +7294,36 @@ KERNEL void VoxelMipmap(
     if(voxel_coord_x < l1_voxelsize && voxel_coord_y < l1_voxelsize && voxel_coord_z < l1_voxelsize)
     {
         if(target_level == 0){
-            mipmap_l1[global_id] = mipmap_l0[global_id] / mipmap_l0[global_id].w;
+            if(mipmap_l0[global_id].w != 0){
+                mipmap_l1[global_id] = mipmap_l0[global_id] / mipmap_l0[global_id].w;
+            }
+            else 
+                mipmap_l1[global_id] = make_float4(0.f, 0.f, 0.f, 0.f);
             return;
         }
 
         float4 l1_color = make_float4(0.f, 0.f, 0.f, 0.f);
-        int l0_idx0 = (voxel_coord_x * 2 + 1) + (voxel_coord_2 * 2 + 1) * l0_voxelsize + (voxel_coord_z * 2 + 1) * l0_voxelsize * l0_voxelsize;
-        int l0_idx1 = (voxel_coord_x * 2 + 2) + (voxel_coord_2 * 2 + 1) * l0_voxelsize + (voxel_coord_z * 2 + 1) * l0_voxelsize * l0_voxelsize;
-        int l0_idx2 = (voxel_coord_x * 2 + 1) + (voxel_coord_2 * 2 + 2) * l0_voxelsize + (voxel_coord_z * 2 + 1) * l0_voxelsize * l0_voxelsize;
-        int l0_idx3 = (voxel_coord_x * 2 + 2) + (voxel_coord_2 * 2 + 2) * l0_voxelsize + (voxel_coord_z * 2 + 1) * l0_voxelsize * l0_voxelsize;
-        int l0_idx4 = (voxel_coord_x * 2 + 1) + (voxel_coord_2 * 2 + 1) * l0_voxelsize + (voxel_coord_z * 2 + 2) * l0_voxelsize * l0_voxelsize;
-        int l0_idx5 = (voxel_coord_x * 2 + 2) + (voxel_coord_2 * 2 + 1) * l0_voxelsize + (voxel_coord_z * 2 + 2) * l0_voxelsize * l0_voxelsize;
-        int l0_idx6 = (voxel_coord_x * 2 + 1) + (voxel_coord_2 * 2 + 2) * l0_voxelsize + (voxel_coord_z * 2 + 2) * l0_voxelsize * l0_voxelsize;
-        int l0_idx7 = (voxel_coord_x * 2 + 2) + (voxel_coord_2 * 2 + 2) * l0_voxelsize + (voxel_coord_z * 2 + 2) * l0_voxelsize * l0_voxelsize;
-        mipmap_l1[global_id] = mipmap_l0[l0_idx0];
-        /*mipmap_l1[global_id] += mipmap_l0[l0_idx1];
-        mipmap_l1[global_id] += mipmap_l0[l0_idx2];
-        mipmap_l1[global_id] += mipmap_l0[l0_idx3];
-        mipmap_l1[global_id] += mipmap_l0[l0_idx4];
-        mipmap_l1[global_id] += mipmap_l0[l0_idx5];
-        mipmap_l1[global_id] += mipmap_l0[l0_idx6];
-        mipmap_l1[global_id] += mipmap_l0[l0_idx7];*/
+        int l0_idx0 = (voxel_coord_x * 2) + (voxel_coord_y * 2) * l0_voxelsize + (voxel_coord_z * 2) * l0_voxelsize * l0_voxelsize;
+        int l0_idx1 = (voxel_coord_x * 2 + 1) + (voxel_coord_y * 2) * l0_voxelsize + (voxel_coord_z * 2) * l0_voxelsize * l0_voxelsize;
+        int l0_idx2 = (voxel_coord_x * 2) + (voxel_coord_y * 2 + 1) * l0_voxelsize + (voxel_coord_z * 2) * l0_voxelsize * l0_voxelsize;
+        int l0_idx3 = (voxel_coord_x * 2 + 1) + (voxel_coord_y * 2 + 1) * l0_voxelsize + (voxel_coord_z * 2) * l0_voxelsize * l0_voxelsize;
+        int l0_idx4 = (voxel_coord_x * 2) + (voxel_coord_y * 2) * l0_voxelsize + (voxel_coord_z * 2 + 1) * l0_voxelsize * l0_voxelsize;
+        int l0_idx5 = (voxel_coord_x * 2 + 1) + (voxel_coord_y * 2) * l0_voxelsize + (voxel_coord_z * 2 + 1) * l0_voxelsize * l0_voxelsize;
+        int l0_idx6 = (voxel_coord_x * 2) + (voxel_coord_y * 2 + 1) * l0_voxelsize + (voxel_coord_z * 2 + 1) * l0_voxelsize * l0_voxelsize;
+        int l0_idx7 = (voxel_coord_x * 2 + 1) + (voxel_coord_y * 2 + 1) * l0_voxelsize + (voxel_coord_z * 2 + 1) * l0_voxelsize * l0_voxelsize;
+
+        l1_color = mipmap_l0[l0_idx0];
+        l1_color += mipmap_l0[l0_idx1];
+        l1_color += mipmap_l0[l0_idx2];
+        l1_color += mipmap_l0[l0_idx3];
+        l1_color += mipmap_l0[l0_idx4];
+        l1_color += mipmap_l0[l0_idx5];
+        l1_color += mipmap_l0[l0_idx6];
+        l1_color += mipmap_l0[l0_idx7];
+
+        if(l1_color.w != 0)
+            mipmap_l1[global_id] = l1_color / l1_color.w;
         
-        //mipmap_l1[global_id] = make_float4(1.f, 0.f, 0.f, 1.f);
     }
 }
 
@@ -7318,24 +7349,352 @@ KERNEL void VoxelVisualization(
     float4 pos = position_data[global_id];
 
    if(global_idx < img_width && global_idy < img_height){
-        if (position_data[global_id].w > 0)
+        if (position_data[global_id].w > 0.f)
         {   
             float3 voxel_base_position = (pos.xyz / pos.w) - make_float3(orig_x, orig_y, orig_z);
             
-            int voxel_coord_x = (int)(voxel_base_position.x / unit_size);
-            int voxel_coord_y = (int)(voxel_base_position.y / unit_size);
-            int voxel_coord_z = (int)(voxel_base_position.z / unit_size);
-            float4 v2 = make_float4((float)voxel_coord_x / voxel_size, (float)voxel_coord_y / voxel_size, (float)voxel_coord_z / voxel_size, 1.f);
-            int voxel_idx = voxel_coord_x + voxel_coord_y * voxel_size + voxel_coord_z * voxel_size * voxel_size;
+            int3 voxel_coord = VoxelCoord(voxel_base_position, unit_size);
+            //float4 v2 = make_float4((float)voxel_coord.x / voxel_size, (float)voxel_coord.y / voxel_size, (float)voxel_coord.z / voxel_size, 1.f);
+            int voxel_idx = voxel_coord.x + voxel_coord.y * voxel_size + voxel_coord.z * voxel_size * voxel_size;
             
             float4 c = voxel_color_data[voxel_idx]; 
             float4 val = clamp(native_powr(c / c.w, 1.f / gamma), 0.f, 1.f);
-            write_imagef(img, make_int2(global_idx + 512, global_idy), val);
+            write_imagef(img, make_int2(global_idx + img_width * 2, global_idy), val);
             
         }
         else
-            write_imagef(img, make_int2(global_idx + 512, global_idy), make_float4(0.f, 0.f, 0.f, 1.f));
+            write_imagef(img, make_int2(global_idx + img_width * 2, global_idy), make_float4(0.f, 0.f, 0.f, 1.f));
         
+    }
+}
+
+typedef struct 
+{
+    GLOBAL float4* voxel_color_l0;
+    float unit_l0;
+    int voxelsize_l0;
+    GLOBAL float4* voxel_color_l1;
+    float unit_l1;
+    int voxelsize_l1;
+    GLOBAL float4* voxel_color_l2;
+    float unit_l2;
+    int voxelsize_l2;
+    GLOBAL float4* voxel_color_l3;
+    float unit_l3;
+    int voxelsize_l3;
+    GLOBAL float4* voxel_color_l4;
+    float unit_l4;
+    int voxelsize_l4;
+    GLOBAL float4* voxel_color_l5;
+    float unit_l5;
+    int voxelsize_l5;
+    GLOBAL float4* voxel_color_l6;
+    float unit_l6;
+    int voxelsize_l6;
+    GLOBAL float4* voxel_color_l7;
+    float unit_l7;
+    int voxelsize_l7;
+} Voxel;
+
+INLINE void Voxel_GetMipmapLevelData(Voxel const* voxel, int mipmap_level, GLOBAL float4** color, float* unit, int* voxel_size)
+{
+    switch(mipmap_level){
+        case 0:
+            *color = voxel->voxel_color_l0;
+            *unit = voxel->unit_l0;
+            *voxel_size = voxel->voxelsize_l0;
+            return;
+        case 1:
+            *color = voxel->voxel_color_l1;
+            *unit = voxel->unit_l1;
+            *voxel_size = voxel->voxelsize_l1;
+            return;
+        case 2:
+            *color = voxel->voxel_color_l2;
+            *unit = voxel->unit_l2;
+            *voxel_size = voxel->voxelsize_l2;
+            return;
+        case 3:
+            *color = voxel->voxel_color_l3;
+            *unit = voxel->unit_l3;
+            *voxel_size = voxel->voxelsize_l3;
+            return;
+        case 4:
+            *color = voxel->voxel_color_l4;
+            *unit = voxel->unit_l4;
+            *voxel_size = voxel->voxelsize_l4;
+            return;
+        case 5:
+            *color = voxel->voxel_color_l5;
+            *unit = voxel->unit_l5;
+            *voxel_size = voxel->voxelsize_l5;
+            return;
+        case 6:
+            *color = voxel->voxel_color_l6;
+            *unit = voxel->unit_l6;
+            *voxel_size = voxel->voxelsize_l6;
+            return;
+        case 7:
+            *color = voxel->voxel_color_l7;
+            *unit = voxel->unit_l7;
+            *voxel_size = voxel->voxelsize_l7;
+            return;
+    }
+    
+}
+
+int isInsideBBox(float3 p, float voxel_max){
+    if (p.x >= 0.f && p.x <= voxel_max &&
+        p.y >= 0.f && p.y <= voxel_max &&
+        p.z >= 0.f && p.z <= voxel_max)
+        return 1;
+    else
+        return 0;
+}
+
+float4 samplingVoxels(float3 p, GLOBAL float4* voxel_data, int3 voxel_coord, float unit_size, int voxel_size){
+    float3 bias = p - make_float3(voxel_coord.x * unit_size, voxel_coord.y * unit_size, voxel_coord.z * unit_size);
+    bias /= unit_size;
+
+    int3 sample_range = make_int3(0, 0, 0);
+    if (bias.x < 0.5)
+        sample_range.x = -1;           
+    else
+        sample_range.x = 1;
+    if (bias.y < 0.5)
+        sample_range.y = -1;
+    else
+        sample_range.y = 1;
+    if (bias.z < 0.5)
+        sample_range.z = -1;
+    else
+        sample_range.z = 1;
+    bias = fabs(bias - make_float3(0.5f, 0.5f, 0.5f));
+
+    int3 voxel_check = voxel_coord + sample_range;
+    if(voxel_check.x < 0 || voxel_check.x >= voxel_size)
+        sample_range.x = 0;
+    if(voxel_check.y < 0 || voxel_check.y >= voxel_size)
+        sample_range.y = 0;
+    if(voxel_check.z < 0 || voxel_check.z >= voxel_size)
+        sample_range.z = 0;
+
+    int idx0 = voxel_coord.x + voxel_coord.y * voxel_size + voxel_coord.z * voxel_size * voxel_size;
+    int idx1 = (voxel_coord.x + sample_range.x) + voxel_coord.y * voxel_size + voxel_coord.z * voxel_size * voxel_size;
+    int idx2 = voxel_coord.x + (voxel_coord.y + sample_range.y) * voxel_size + voxel_coord.z * voxel_size * voxel_size;
+    int idx3 = (voxel_coord.x + sample_range.x) + (voxel_coord.y + sample_range.y) * voxel_size + voxel_coord.z * voxel_size * voxel_size;
+    int idx4 = voxel_coord.x + voxel_coord.y * voxel_size + (voxel_coord.z + sample_range.z) * voxel_size * voxel_size;
+    int idx5 = (voxel_coord.x + sample_range.x) + voxel_coord.y * voxel_size + (voxel_coord.z + sample_range.z) * voxel_size * voxel_size;
+    int idx6 = voxel_coord.x + (voxel_coord.y + sample_range.y) * voxel_size + (voxel_coord.z + sample_range.z) * voxel_size * voxel_size;
+    int idx7 = (voxel_coord.x + sample_range.x) + (voxel_coord.y + sample_range.y) * voxel_size + (voxel_coord.z + sample_range.z) * voxel_size * voxel_size;
+
+    
+    float4 color01 = voxel_data[idx0] * (1 - bias.x) + voxel_data[idx1] * bias.x;
+    float4 color23 = voxel_data[idx2] * (1 - bias.x) + voxel_data[idx3] * bias.x;
+    float4 color45 = voxel_data[idx4] * (1 - bias.x) + voxel_data[idx5] * bias.x;
+    float4 color67 = voxel_data[idx6] * (1 - bias.x) + voxel_data[idx7] * bias.x;
+
+    float4 color0123 = color01 * (1 - bias.y) + color23  * bias.y;
+    float4 color4567 = color45 * (1 - bias.y) + color67  * bias.y;
+
+    float4 color = color0123 * (1 - bias.z) + color4567 * bias.z;
+
+    
+
+    return color;
+}
+
+float4 traceDiffuseVoxelCone(Voxel voxel, float3 from, float3 direction, float voxel_max, int mipmap_max){
+    direction = normalize(direction);
+    int level = 0;
+    float dist = 0.f;
+
+    GLOBAL float4* voxel_data;
+    float unit_size_min;
+    int voxel_size;
+    Voxel_GetMipmapLevelData(&voxel, 0, &voxel_data, &unit_size_min, &voxel_size);
+
+    float4 acc = make_float4(0.f, 0.f, 0.f, 0.f);
+
+    float3 tracepos = from;
+    
+    while(isInsideBBox(tracepos, voxel_max) && acc.w <= 1.f){
+        float conewidth = 0.325f * dist * 2.f;
+        float l = 1.f + conewidth / unit_size_min;
+        level = min((int)log2(l), mipmap_max);
+        float ll = (level + 1) * (level + 1);
+
+        float unit_size;
+        Voxel_GetMipmapLevelData(&voxel, level, &voxel_data, &unit_size, &voxel_size);
+        int3 voxel_coord = VoxelCoord(tracepos, unit_size);
+        int voxel_idx = voxel_coord.x + voxel_coord.y * voxel_size + voxel_coord.z * voxel_size * voxel_size;
+        float4 c = voxel_data[voxel_idx];
+        if(c.w > 0.f){
+            float4 s1 = samplingVoxels(tracepos, voxel_data, voxel_coord, unit_size, voxel_size);
+
+            float4 s2 = make_float4(0.f, 0.f, 0.f, 0.f);
+            GLOBAL float4* s2_voxel_data;
+            float s2_unit_size;
+            int s2_voxel_size;
+            int3 s2_voxel_coord;
+            if(conewidth < unit_size && level > 0){                
+                Voxel_GetMipmapLevelData(&voxel, level - 1, &s2_voxel_data, &s2_unit_size, &s2_voxel_size);
+                s2_voxel_coord = VoxelCoord(tracepos, s2_unit_size);
+                s2 = samplingVoxels(tracepos, s2_voxel_data, s2_voxel_coord, s2_unit_size, s2_voxel_size);
+                float weight = (conewidth - s2_unit_size) / s2_unit_size;
+                s1 = (1.f - weight) * s2 + weight * s1;                
+            }
+            if(conewidth > unit_size && level < mipmap_max){                
+                Voxel_GetMipmapLevelData(&voxel, level + 1, &s2_voxel_data, &s2_unit_size, &s2_voxel_size);
+                s2_voxel_coord = VoxelCoord(tracepos, s2_unit_size);
+                s2 = samplingVoxels(tracepos, s2_voxel_data, s2_voxel_coord, s2_unit_size, s2_voxel_size);
+                float weight = (conewidth - unit_size) / unit_size;
+                s1 = (1.f - weight) * s1 + weight * s2;                
+            }
+
+            acc += (1.f - acc.w) * s1 * s1.w;
+            //acc += c;           
+        }
+        float step = unit_size;
+        dist += step;
+        tracepos += direction * step;
+
+    }
+    return acc;
+
+}
+
+KERNEL void VoxelConeTracing(
+    GLOBAL float4 const* color_data,
+    GLOBAL float4 const* position_data,
+    GLOBAL float4 const* normal_data,
+    int mipmap_level,
+    float orig_x,
+    float orig_y,
+    float orig_z,
+    GLOBAL float4* voxel_color_data_l0,
+    float unit_size_l0,
+    int voxel_size_l0,
+    GLOBAL float4* voxel_color_data_l1,
+    float unit_size_l1,
+    int voxel_size_l1,
+    GLOBAL float4* voxel_color_data_l2,
+    float unit_size_l2,
+    int voxel_size_l2,
+    GLOBAL float4* voxel_color_data_l3,
+    float unit_size_l3,
+    int voxel_size_l3,
+    GLOBAL float4* voxel_color_data_l4,
+    float unit_size_l4,
+    int voxel_size_l4,
+    GLOBAL float4* voxel_color_data_l5,
+    float unit_size_l5,
+    int voxel_size_l5,
+    GLOBAL float4* voxel_color_data_l6,
+    float unit_size_l6,
+    int voxel_size_l6,
+    GLOBAL float4* voxel_color_data_l7,
+    float unit_size_l7,
+    int voxel_size_l7,
+    int img_width,
+    int img_height,
+    float gamma,
+    write_only image2d_t img
+)
+{
+    Voxel voxel = {
+        voxel_color_data_l0,
+        unit_size_l0,
+        voxel_size_l0,
+        voxel_color_data_l1,
+        unit_size_l1,
+        voxel_size_l1,
+        voxel_color_data_l2,
+        unit_size_l2,
+        voxel_size_l2,
+        voxel_color_data_l3,
+        unit_size_l3,
+        voxel_size_l3,
+        voxel_color_data_l4,
+        unit_size_l4,
+        voxel_size_l4,
+        voxel_color_data_l5,
+        unit_size_l5,
+        voxel_size_l5,
+        voxel_color_data_l6,
+        unit_size_l6,
+        voxel_size_l6,
+        voxel_color_data_l7,
+        unit_size_l7,
+        voxel_size_l7
+    };
+
+    int global_id = get_global_id(0);
+
+    int global_idx = global_id % img_width;
+    int global_idy = global_id / img_width;
+
+    if(global_idx < img_width && global_idy < img_height){
+        float4 color = color_data[global_id];
+        float4 position = position_data[global_id];
+        float4 normaldata = normal_data[global_id];
+
+        color /= color.w;
+        if (position_data[global_id].w > 0.f)
+        {
+            float3 voxel_orig = make_float3(orig_x, orig_y, orig_z);
+            float voxel_max = unit_size_l0 * voxel_size_l0;
+
+            float3 pos = position.xyz / position.w - voxel_orig;
+            float3 normal = normalize(normaldata.xyz / normaldata.w);
+            const float3 ortho = GetOrthoVector(normal);
+            const float3 ortho2 = normalize(cross(ortho, normal));
+
+            const float3 corner = 0.5f * (ortho + ortho2);
+            const float3 corner2 = 0.5f * (ortho - ortho2);
+
+            float angle_mix = 0.5f;
+
+            float3 n_offset = normal * (1.f + 2.828f) * unit_size_l0;
+            float3 c_origin = pos + n_offset;
+
+            float4 acc = make_float3(0.f, 0.f, 0.f, 0.f);
+            
+            acc += traceDiffuseVoxelCone(voxel, c_origin, normal, voxel_max, mipmap_level);
+
+            float3 s1 = mix(normal, ortho, angle_mix);
+            float3 s2 = mix(normal, -ortho, angle_mix);
+            float3 s3 = mix(normal, ortho2, angle_mix);
+            float3 s4 = mix(normal, -ortho2, angle_mix);
+
+            acc += traceDiffuseVoxelCone(voxel, c_origin, s1, voxel_max, mipmap_level);
+            acc += traceDiffuseVoxelCone(voxel, c_origin, s2, voxel_max, mipmap_level);
+            acc += traceDiffuseVoxelCone(voxel, c_origin, s3, voxel_max, mipmap_level);
+            acc += traceDiffuseVoxelCone(voxel, c_origin, s4, voxel_max, mipmap_level);
+
+            float3 c1 = mix(normal, corner, angle_mix);
+            float3 c2 = mix(normal, -corner, angle_mix);
+            float3 c3 = mix(normal, corner2, angle_mix);
+            float3 c4 = mix(normal, -corner2, angle_mix);
+
+            acc += traceDiffuseVoxelCone(voxel, c_origin, c1, voxel_max, mipmap_level);
+            acc += traceDiffuseVoxelCone(voxel, c_origin, c2, voxel_max, mipmap_level);
+            acc += traceDiffuseVoxelCone(voxel, c_origin, c3, voxel_max, mipmap_level);
+            acc += traceDiffuseVoxelCone(voxel, c_origin, c4, voxel_max, mipmap_level);
+/**/
+            acc /= 20.f;  
+            //float4 c = make_float4(acc.x, acc.y, acc.z, 0.f);
+            float4 c = acc / acc.w;
+
+            color += c;
+            
+            float4 val = clamp(native_powr(c / c.w, 1.f / gamma), 0.f, 1.f);
+            write_imagef(img, make_int2(global_idx + img_width, global_idy), val);
+            return;
+        }
+
+        float4 val = clamp(native_powr(color / color.w, 1.f / gamma), 0.f, 1.f);
+        write_imagef(img, make_int2(global_idx + img_width, global_idy), val);
     }
 }
 

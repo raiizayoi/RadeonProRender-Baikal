@@ -90,6 +90,10 @@ namespace Baikal
 
 	static bool     g_is_pgup_pressed = false;
 	static bool     g_is_pgdn_pressed = false;
+	static bool     g_is_c_pressed = false;
+	static bool     g_is_v_pressed = false;
+	static bool     g_is_b_pressed = false;
+	static bool     g_is_p_pressed = false;
 
     auto start = std::chrono::high_resolution_clock::now();
 
@@ -297,6 +301,18 @@ namespace Baikal
 		case GLFW_KEY_PAGE_DOWN:
 			g_is_pgdn_pressed = action == GLFW_PRESS;
 			break;
+		case GLFW_KEY_C:
+			g_is_c_pressed = action == GLFW_PRESS;
+			break;
+		case GLFW_KEY_V:
+			g_is_v_pressed = action == GLFW_PRESS;
+			break;
+		case GLFW_KEY_B:
+			g_is_b_pressed = action == GLFW_PRESS;
+			break;
+		case GLFW_KEY_P:
+			g_is_p_pressed = action == GLFW_PRESS;
+			break;
         default:
             break;
         }
@@ -313,7 +329,7 @@ namespace Baikal
         float camrotx = 0.f;
         float camroty = 0.f;
 
-		if (m_settings.voxel_created < 1) {
+		if (m_settings.voxel_created < 1 && m_settings.voxel_enabled) {
 			float3 light_pos, light_at, light_up;
 			switch (m_settings.voxel_sample_count)
 			{
@@ -439,6 +455,35 @@ namespace Baikal
 					m_settings.voxel_mipmap_level++;
 					if (m_settings.voxel_mipmap_level > log2(m_settings.voxel_size))
 						m_settings.voxel_mipmap_level = log2(m_settings.voxel_size);
+				}
+
+				if (g_is_c_pressed) 
+				{
+					g_is_c_pressed = false;
+					m_settings.voxel_catch = 1;
+				}
+
+				if (g_is_v_pressed)
+				{
+					g_is_v_pressed = false;
+					m_cl->SaveVoxelData("../" + m_settings.modelname + ".txt");
+				}
+
+				if (g_is_b_pressed)
+				{
+					g_is_b_pressed = false;
+					m_cl->LoadVoxelData("../" + m_settings.modelname + ".txt");
+					m_settings.voxel_created = 1;
+					m_settings.voxel_enabled = 1;
+					m_settings.voxel_mipmaped = 0;
+				}
+
+				if (g_is_p_pressed)
+				{
+					g_is_p_pressed = false;
+					m_settings.voxel_visualized = !m_settings.voxel_visualized;
+					m_settings.voxel_conetracing_enabled = !m_settings.voxel_conetracing_enabled;
+					
 				}
 			}
 		}
@@ -571,7 +616,7 @@ namespace Baikal
     #endif
 
             // GLUT Window Initialization:
-            m_window = glfwCreateWindow(m_settings.width * 3, m_settings.height, "Baikal standalone demo", nullptr, nullptr);
+            m_window = glfwCreateWindow(m_settings.width * 2, m_settings.height, "Baikal standalone demo", nullptr, nullptr);
             glfwMakeContextCurrent(m_window);
 
     #ifndef __APPLE__

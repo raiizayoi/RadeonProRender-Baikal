@@ -130,6 +130,7 @@ namespace Baikal
 
 			m_outputs[i].output_position = m_cfgs[i].factory->CreateOutput(settings.width, settings.height);
 			m_outputs[i].output_normal = m_cfgs[i].factory->CreateOutput(settings.width, settings.height);
+			m_outputs[i].output_albedo = m_cfgs[i].factory->CreateOutput(settings.width, settings.height);
 
 #ifdef ENABLE_DENOISER
             m_outputs[i].output_denoised = m_cfgs[i].factory->CreateOutput(settings.width, settings.height);
@@ -145,6 +146,7 @@ namespace Baikal
 
 			m_cfgs[i].renderer->SetOutput(Baikal::Renderer::OutputType::kWorldPosition, m_outputs[i].output_position.get());
 			m_cfgs[i].renderer->SetOutput(Baikal::Renderer::OutputType::kWorldShadingNormal, m_outputs[i].output_normal.get());
+			m_cfgs[i].renderer->SetOutput(Baikal::Renderer::OutputType::kAlbedo, m_outputs[i].output_albedo.get());
 
 #ifdef ENABLE_DENOISER
             m_cfgs[i].renderer->SetOutput(Baikal::Renderer::OutputType::kWorldShadingNormal, m_outputs[i].output_normal.get());
@@ -167,6 +169,82 @@ namespace Baikal
         m_cfgs[m_primary].renderer->Clear(RadeonRays::float3(0, 0, 0), *m_shape_id_data.output);		
     }
 
+	const char *getErrorString(cl_int error)
+	{
+		switch (error) {
+			// run-time and JIT compiler errors
+		case 0: return "CL_SUCCESS";
+		case -1: return "CL_DEVICE_NOT_FOUND";
+		case -2: return "CL_DEVICE_NOT_AVAILABLE";
+		case -3: return "CL_COMPILER_NOT_AVAILABLE";
+		case -4: return "CL_MEM_OBJECT_ALLOCATION_FAILURE";
+		case -5: return "CL_OUT_OF_RESOURCES";
+		case -6: return "CL_OUT_OF_HOST_MEMORY";
+		case -7: return "CL_PROFILING_INFO_NOT_AVAILABLE";
+		case -8: return "CL_MEM_COPY_OVERLAP";
+		case -9: return "CL_IMAGE_FORMAT_MISMATCH";
+		case -10: return "CL_IMAGE_FORMAT_NOT_SUPPORTED";
+		case -11: return "CL_BUILD_PROGRAM_FAILURE";
+		case -12: return "CL_MAP_FAILURE";
+		case -13: return "CL_MISALIGNED_SUB_BUFFER_OFFSET";
+		case -14: return "CL_EXEC_STATUS_ERROR_FOR_EVENTS_IN_WAIT_LIST";
+		case -15: return "CL_COMPILE_PROGRAM_FAILURE";
+		case -16: return "CL_LINKER_NOT_AVAILABLE";
+		case -17: return "CL_LINK_PROGRAM_FAILURE";
+		case -18: return "CL_DEVICE_PARTITION_FAILED";
+		case -19: return "CL_KERNEL_ARG_INFO_NOT_AVAILABLE";
+
+			// compile-time errors
+		case -30: return "CL_INVALID_VALUE";
+		case -31: return "CL_INVALID_DEVICE_TYPE";
+		case -32: return "CL_INVALID_PLATFORM";
+		case -33: return "CL_INVALID_DEVICE";
+		case -34: return "CL_INVALID_CONTEXT";
+		case -35: return "CL_INVALID_QUEUE_PROPERTIES";
+		case -36: return "CL_INVALID_COMMAND_QUEUE";
+		case -37: return "CL_INVALID_HOST_PTR";
+		case -38: return "CL_INVALID_MEM_OBJECT";
+		case -39: return "CL_INVALID_IMAGE_FORMAT_DESCRIPTOR";
+		case -40: return "CL_INVALID_IMAGE_SIZE";
+		case -41: return "CL_INVALID_SAMPLER";
+		case -42: return "CL_INVALID_BINARY";
+		case -43: return "CL_INVALID_BUILD_OPTIONS";
+		case -44: return "CL_INVALID_PROGRAM";
+		case -45: return "CL_INVALID_PROGRAM_EXECUTABLE";
+		case -46: return "CL_INVALID_KERNEL_NAME";
+		case -47: return "CL_INVALID_KERNEL_DEFINITION";
+		case -48: return "CL_INVALID_KERNEL";
+		case -49: return "CL_INVALID_ARG_INDEX";
+		case -50: return "CL_INVALID_ARG_VALUE";
+		case -51: return "CL_INVALID_ARG_SIZE";
+		case -52: return "CL_INVALID_KERNEL_ARGS";
+		case -53: return "CL_INVALID_WORK_DIMENSION";
+		case -54: return "CL_INVALID_WORK_GROUP_SIZE";
+		case -55: return "CL_INVALID_WORK_ITEM_SIZE";
+		case -56: return "CL_INVALID_GLOBAL_OFFSET";
+		case -57: return "CL_INVALID_EVENT_WAIT_LIST";
+		case -58: return "CL_INVALID_EVENT";
+		case -59: return "CL_INVALID_OPERATION";
+		case -60: return "CL_INVALID_GL_OBJECT";
+		case -61: return "CL_INVALID_BUFFER_SIZE";
+		case -62: return "CL_INVALID_MIP_LEVEL";
+		case -63: return "CL_INVALID_GLOBAL_WORK_SIZE";
+		case -64: return "CL_INVALID_PROPERTY";
+		case -65: return "CL_INVALID_IMAGE_DESCRIPTOR";
+		case -66: return "CL_INVALID_COMPILER_OPTIONS";
+		case -67: return "CL_INVALID_LINKER_OPTIONS";
+		case -68: return "CL_INVALID_DEVICE_PARTITION_COUNT";
+
+			// extension errors
+		case -1000: return "CL_INVALID_GL_SHAREGROUP_REFERENCE_KHR";
+		case -1001: return "CL_PLATFORM_NOT_FOUND_KHR";
+		case -1002: return "CL_INVALID_D3D10_DEVICE_KHR";
+		case -1003: return "CL_INVALID_D3D10_RESOURCE_KHR";
+		case -1004: return "CL_D3D10_RESOURCE_ALREADY_ACQUIRED_KHR";
+		case -1005: return "CL_D3D10_RESOURCE_NOT_ACQUIRED_KHR";
+		default: return "Unknown OpenCL error";
+		}
+	}
 
     void AppClRender::LoadScene(AppSettings& settings)
     {
@@ -269,7 +347,7 @@ namespace Baikal
 			m_voxel_data.mipmap_buffers.push_back(mipmap_buffer);
 		}
 		std::cout << "Mipmap Level: " << m_voxel_data.mipmap_buffers.size() << "\n";
-		/*cl_int errNum;
+		cl_int errNum;
 		cl_image_format clImageFormat;
 		clImageFormat.image_channel_order = CL_RGBA;
 		clImageFormat.image_channel_data_type = CL_FLOAT;
@@ -281,12 +359,14 @@ namespace Baikal
 		clImageDesc.image_depth = settings.voxel_size;
 		clImageDesc.image_row_pitch = 0;
 		clImageDesc.image_slice_pitch = 0;
-		clImageDesc.num_mip_levels = 3;
+		clImageDesc.num_mip_levels = m_voxel_data.mipmap_buffers.size();
 		clImageDesc.num_samples = 0;
 		clImageDesc.buffer = NULL;	
 
-		m_voxel_data.voxel_texture = clCreateImage(m_cfgs[m_primary].context, CL_MEM_READ_WRITE, &clImageFormat, &clImageDesc, nullptr, &errNum);	*/	
-		
+
+		m_voxel_data.voxel_texture = clCreateImage(m_cfgs[m_primary].context, CL_MEM_READ_WRITE, &clImageFormat, &clImageDesc, nullptr, &errNum);	
+		if (errNum != CL_SUCCESS)
+			std::cerr << getErrorString(errNum) << std::endl;
 
     }
 
@@ -301,6 +381,7 @@ namespace Baikal
                 m_cfgs[i].renderer->Clear(float3(0, 0, 0), *m_outputs[i].output);
 				m_cfgs[i].renderer->Clear(float3(0, 0, 0), *m_outputs[i].output_position);
 				m_cfgs[i].renderer->Clear(float3(0, 0, 0), *m_outputs[i].output_normal);
+				m_cfgs[i].renderer->Clear(float3(0, 0, 0), *m_outputs[i].output_albedo);
 
 #ifdef ENABLE_DENOISER
                 m_cfgs[i].renderer->Clear(float3(0, 0, 0), *m_outputs[i].output_normal);
@@ -314,7 +395,7 @@ namespace Baikal
                 m_ctrl[i].clear.store(true);
         }
     }
-
+	
     void AppClRender::Update(AppSettings& settings)
     {
         //if (std::chrono::duration_cast<std::chrono::seconds>(time - updatetime).count() > 1)
@@ -389,6 +470,7 @@ namespace Baikal
             auto output = m_outputs[m_primary].output.get();
 			auto position_output = m_outputs[m_primary].output_position.get();
 			auto normal_output = m_outputs[m_primary].output_normal.get();
+			auto albedo_output = m_outputs[m_primary].output_albedo.get();
 #endif
 
             int argc = 0;			
@@ -405,7 +487,7 @@ namespace Baikal
 
             m_cfgs[m_primary].context.Launch1D(0, ((globalsize + 63) / 64) * 64, 64, copykernel);
 
-			if (settings.samplecount == 50 && !settings.voxel_created) {
+			if ((settings.samplecount == 30 && !settings.voxel_created && settings.voxel_enabled) || settings.voxel_catch) {
 
 				//m_voxel_data.color.resize(std::pow(settings.voxel_size, 3), float4(0.f));
 				m_cfgs[m_primary].context.WriteBuffer(0, m_voxel_data.color_buffer, &m_voxel_data.color[0], m_voxel_data.color.size());
@@ -439,13 +521,28 @@ namespace Baikal
 				}
 				UpdateScene();
 				settings.samplecount = 0;
+				if (settings.voxel_catch) {
+					settings.voxel_catch = 0;
+					settings.voxel_created = 1;
+					settings.voxel_enabled = 1;
+					settings.voxel_mipmaped = 0;
+				}
+				
+			}
+			if(!settings.voxel_created && !settings.voxel_enabled){
+				settings.voxel_created = 1;
+				m_camera->LookAt(settings.camera_pos
+					, settings.camera_at
+					, settings.camera_up);
+				static_cast<Baikal::MonteCarloRenderer*>(m_cfgs[m_primary].renderer.get())->SetVoxelCreated(settings.voxel_created);
 			}
 				
-			if (settings.voxel_created) {
+			if (settings.voxel_created && settings.voxel_enabled) {
 				
 				if (!settings.voxel_mipmaped) {
+					m_cfgs[m_primary].context.WriteBuffer(0, m_voxel_data.color_buffer, &m_voxel_data.color[0], m_voxel_data.color.size());
 					for (int i = 0; i < m_voxel_data.mipmap_buffers.size(); i++) {
-						std::cout << "Create Mipmap Level: " << i << "\n";
+						//std::cout << "Create Mipmap Level: " << i << "\n";
 						argc = 0;
 						if (i == 0) {
 							mipmapkernel.SetArg(argc++, m_voxel_data.color_buffer);
@@ -460,20 +557,21 @@ namespace Baikal
 						mipmapkernel.SetArg(argc++, i);
 
 						globalsize = std::pow(settings.voxel_size / std::pow(2, i), 3);
-						std::cout << globalsize << "\n";
+						//std::cout << globalsize << "\n";
 
 						m_cfgs[m_primary].context.Launch1D(0, ((globalsize + 63) / 64) * 64, 64, mipmapkernel);
 
 					}
 					settings.voxel_mipmaped = 1;
 				}
-				if (settings.voxel_mipmaped) {
-					
+				if (settings.voxel_mipmaped && settings.voxel_conetracing_enabled) {
+
 					argc = 0;
 
 					voxelconetracingkernel.SetArg(argc++, static_cast<Baikal::ClwOutput*>(output)->data());
 					voxelconetracingkernel.SetArg(argc++, static_cast<Baikal::ClwOutput*>(position_output)->data());
 					voxelconetracingkernel.SetArg(argc++, static_cast<Baikal::ClwOutput*>(normal_output)->data());
+					voxelconetracingkernel.SetArg(argc++, static_cast<Baikal::ClwOutput*>(albedo_output)->data());
 					voxelconetracingkernel.SetArg(argc++, log2f(settings.voxel_size));
 					voxelconetracingkernel.SetArg(argc++, m_voxel_data.orig[0]);
 					voxelconetracingkernel.SetArg(argc++, m_voxel_data.orig[1]);
@@ -499,7 +597,9 @@ namespace Baikal
 					globalsize = output->width() * output->height();
 
 					m_cfgs[m_primary].context.Launch1D(0, ((globalsize + 63) / 64) * 64, 64, voxelconetracingkernel);
+				}
 
+				if(settings.voxel_visualized){
 					//Voxel Visualization
 					argc = 0;
 					int mipmap_level = settings.voxel_mipmap_level;
@@ -598,6 +698,45 @@ namespace Baikal
         m_outputs[m_primary].denoiser->Apply(input_set, *m_outputs[m_primary].output_denoised);
 #endif
     }
+
+	void AppClRender::SaveVoxelData(std::string modelname) {
+		std::fstream fs;
+		fs.open(modelname, std::ios::out);
+		if (!fs)
+			std::cout << "Voxeldata save failed!\n";
+		fs << "s " << m_voxel_data.color.size() << "\n";
+		for (size_t i = 0; i < m_voxel_data.color.size(); i++)
+		{
+			fs << "v " << m_voxel_data.color[i][0] << " " << m_voxel_data.color[i][1] << " " << m_voxel_data.color[i][2] << " " << m_voxel_data.color[i][3] << "\n";
+		}
+		fs.close();
+		std::cout << "Voxeldata save success!\n";
+	}
+
+	void AppClRender::LoadVoxelData(std::string dataname) {
+		std::ifstream ifile(dataname);
+		std::string temp;
+		int count = 0;
+		int size;
+		while (ifile >> temp) {
+			switch (temp[0]) {
+			case 's':
+				ifile >> size;
+				std::cout << size << "\n";
+				if (size != m_voxel_data.color.size()) {
+					std::cout << "Voxeldata in diffrent size !\n";
+					ifile.close();
+					return;
+				}
+				break;
+			case 'v':
+				ifile >> m_voxel_data.color[count][0] >> m_voxel_data.color[count][1] >> m_voxel_data.color[count][2] >> m_voxel_data.color[count][3];
+				count++;
+				break;
+			}
+		}
+		ifile.close();
+	}
 
     void AppClRender::SaveFrameBuffer(AppSettings& settings)
     {
