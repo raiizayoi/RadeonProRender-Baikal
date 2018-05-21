@@ -260,7 +260,7 @@ namespace Baikal
                         {
                             // Push the new data.
                             for (int k = 0; k < 3; ++k)
-                                vertices.push_back(shape.mesh.positions[3 * old_index + k]);
+                                vertices.push_back(shape.mesh.positions[3 * old_index + k] * 0.01f);
                             for (int k = 0; k < 3; ++k)
                                 normals.push_back(shape.mesh.normals[3 * old_index + k]);
                             if (!shape.mesh.texcoords.empty())
@@ -335,7 +335,7 @@ namespace Baikal
 
         // TODO: temporary code to add directional light
         auto light = DirectionalLight::Create();
-        light->SetDirection(RadeonRays::normalize(RadeonRays::float3(-1.1f, -0.6f, -0.2f)));
+        light->SetDirection(RadeonRays::normalize(RadeonRays::float3(0.f, -0.5f, -0.2f)));
         light->SetEmittedRadiance(10.f * RadeonRays::float3(1.f, 0.95f, 0.92f));
 
         auto light1 = DirectionalLight::Create();
@@ -344,7 +344,7 @@ namespace Baikal
         light1->SetDirection(d);
         light1->SetEmittedRadiance(3.f * RadeonRays::float3(1.f, 0.8f, 0.65f));
 
-        //scene->AttachLight(light);
+        scene->AttachLight(light);
         //scene->AttachLight(light1);
         //scene->AttachLight(ibl);
 

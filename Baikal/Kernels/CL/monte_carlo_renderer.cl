@@ -105,14 +105,14 @@ void PerspectiveCamera_GeneratePaths(
         // Calculate [0..1] image plane sample
         float2 img_sample;
 
-        if(voxel_created){
+        /*if(voxel_created){
             img_sample.x = (float)x / output_width + sample0.x / output_width;
             img_sample.y = (float)y / output_height + sample0.y / output_height;
         }
-        else{
+        else{*/
             img_sample.x = (float)x / output_width;
             img_sample.y = (float)y / output_height;
-        }
+        //}
         // Transform into [-0.5, 0.5]
         float2 h_sample = img_sample - make_float2(0.5f, 0.5f);
         if(voxel_created){

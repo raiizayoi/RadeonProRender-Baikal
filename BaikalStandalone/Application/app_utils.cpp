@@ -191,14 +191,14 @@ namespace Baikal
     }
 
     AppSettings::AppSettings()
-        : path("../Resources/CornellBox")
-        , modelname("orig.objm")
+        : path("../Resources/sponza")
+        , modelname("sponza.obj")
         , envmapname("../Resources/Textures/studio015.hdr")
         //render
         , width(512)
         , height(512)
         , num_bounces(1)
-        , num_samples(-1)
+        , num_samples(200)
         , interop(true)
         , cspeed(10.25f)
         , mode(ConfigManager::Mode::kUseSingleGpu)
@@ -208,8 +208,8 @@ namespace Baikal
         , ao_enabled(false)
 
         //camera
-        , camera_pos(0.f, 1.f, 3.f)
-        , camera_at(0.f, 1.f, 0.f)
+		, camera_pos(2.f, 5.f, -1.f)
+		, camera_at(2.f, 4.f, -1.2f)
         , camera_up(0.f, 1.f, 0.f)
         , camera_sensor_size(0.036f, 0.024f)  // default full frame sensor 36x24 mm
         , camera_zcap(0.0f, 100000.f)
@@ -241,7 +241,7 @@ namespace Baikal
         , device_index(-1)
 
 		//Voxel
-		, voxel_enabled(1)
+		, voxel_enabled(0)
 		, voxel_size(64)
 		, voxel_created(0)
 		, voxel_sample(6)
@@ -249,8 +249,8 @@ namespace Baikal
 		, voxel_mipmaped(0)
 		, voxel_mipmap_level(0)
 		, voxel_catch(0)
-		, voxel_visualized(0)
-		, voxel_conetracing_enabled(1)
+		, voxel_visualized(1)
+		, voxel_conetracing_enabled(0)
     {
     }
 }
