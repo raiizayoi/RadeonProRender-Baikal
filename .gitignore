@@ -26,3 +26,5 @@
 *.failed
 .vs/Baikal/v14/.suo
 orig.objm.txt
+Resources/sponza/copyright.txt
+*.png
