@@ -242,7 +242,7 @@ namespace Baikal
 
 		//Voxel
 		, voxel_enabled(0)
-		, voxel_size(64)
+		, voxel_size(128)
 		, voxel_created(0)
 		, voxel_sample(6)
 		, voxel_sample_count(0)
