@@ -1,4 +1,4 @@
-# Install script for directory: I:/GitHub/RadeonProRender-Baikal/Gtest
+# Install script for directory: D:/de/GitHub/RadeonProRender-Baikal/Gtest
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)

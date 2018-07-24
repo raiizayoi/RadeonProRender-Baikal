@@ -335,7 +335,7 @@ namespace Baikal
 
         // TODO: temporary code to add directional light
         auto light = DirectionalLight::Create();
-        light->SetDirection(RadeonRays::normalize(RadeonRays::float3(0.f, -0.5f, -0.2f)));
+        light->SetDirection(RadeonRays::normalize(RadeonRays::float3(-5.f, -20.f, 5.f)));
         light->SetEmittedRadiance(10.f * RadeonRays::float3(1.f, 0.95f, 0.92f));
 
         auto light1 = DirectionalLight::Create();

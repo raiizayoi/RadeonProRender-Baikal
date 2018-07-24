@@ -195,12 +195,12 @@ namespace Baikal
         , modelname("sponza.obj")
         , envmapname("../Resources/Textures/studio015.hdr")
         //render
-        , width(512)
-        , height(512)
+        , width(1920)
+        , height(1080)
         , num_bounces(1)
-        , num_samples(200)
+        , num_samples(-1)
         , interop(true)
-        , cspeed(10.25f)
+        , cspeed(2.25f)
         , mode(ConfigManager::Mode::kUseSingleGpu)
         //ao
         , ao_radius(1.f)
@@ -208,8 +208,8 @@ namespace Baikal
         , ao_enabled(false)
 
         //camera
-		, camera_pos(2.f, 5.f, -1.f)
-		, camera_at(2.f, 4.f, -1.2f)
+		, camera_pos(-12.054f, 1.724f, -0.935f)
+		, camera_at(-11.124f, 1.698f, -0.569f)
         , camera_up(0.f, 1.f, 0.f)
         , camera_sensor_size(0.036f, 0.024f)  // default full frame sensor 36x24 mm
         , camera_zcap(0.0f, 100000.f)
@@ -242,15 +242,14 @@ namespace Baikal
 
 		//Voxel
 		, voxel_enabled(0)
-		, voxel_size(128)
+		, voxel_size(256)
 		, voxel_created(0)
 		, voxel_sample(6)
 		, voxel_sample_count(0)
 		, voxel_mipmaped(0)
 		, voxel_mipmap_level(0)
 		, voxel_catch(0)
-		, voxel_visualized(1)
-		, voxel_conetracing_enabled(0)
+		, voxel_mode(0)
     {
     }
 }

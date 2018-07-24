@@ -115,17 +115,17 @@ void PerspectiveCamera_GeneratePaths(
         //}
         // Transform into [-0.5, 0.5]
         float2 h_sample = img_sample - make_float2(0.5f, 0.5f);
-        if(voxel_created){
+        //if(voxel_created){
             // Transform into [-dim/2, dim/2]
             float2 c_sample = h_sample * camera->dim;
 
             // Calculate direction to image plane
             my_ray->d.xyz = normalize(camera->focal_length * camera->forward + c_sample.x * camera->right + c_sample.y * camera->up);
-        }
+        /*}
         else{
             float2 c_sample = h_sample * 2;
             my_ray->d.xyz = normalize(camera->forward * 0.25f + c_sample.x * camera->right + c_sample.y * camera->up);
-        }
+        }*/
         // Origin == camera position + nearz * d
         my_ray->o.xyz = camera->p + camera->zcap.x * my_ray->d.xyz;
         // Max T value = zfar - znear since we moved origin to znear
@@ -1085,17 +1085,45 @@ KERNEL void VoxelMipmap(
         int l0_idx6 = (voxel_coord_x * 2) + (voxel_coord_y * 2 + 1) * l0_voxelsize + (voxel_coord_z * 2 + 1) * l0_voxelsize * l0_voxelsize;
         int l0_idx7 = (voxel_coord_x * 2 + 1) + (voxel_coord_y * 2 + 1) * l0_voxelsize + (voxel_coord_z * 2 + 1) * l0_voxelsize * l0_voxelsize;
 
-        l1_color = mipmap_l0[l0_idx0];
-        l1_color += mipmap_l0[l0_idx1];
-        l1_color += mipmap_l0[l0_idx2];
-        l1_color += mipmap_l0[l0_idx3];
-        l1_color += mipmap_l0[l0_idx4];
-        l1_color += mipmap_l0[l0_idx5];
-        l1_color += mipmap_l0[l0_idx6];
-        l1_color += mipmap_l0[l0_idx7];
+        float not_empty = 0.f;
+        if(mipmap_l0[l0_idx0].w > 0.f){
+            l1_color = mipmap_l0[l0_idx0];
+            not_empty += 1.f;
+        }
+        if(mipmap_l0[l0_idx1].w > 0.f){
+            l1_color += mipmap_l0[l0_idx1];
+            not_empty += 1.f;
+        }
+        if(mipmap_l0[l0_idx2].w > 0.f){
+            l1_color += mipmap_l0[l0_idx2];
+            not_empty += 1.f;
+        }
+        if(mipmap_l0[l0_idx3].w > 0.f){
+            l1_color += mipmap_l0[l0_idx3];
+            not_empty += 1.f;
+        }
+        if(mipmap_l0[l0_idx4].w > 0.f){
+            l1_color += mipmap_l0[l0_idx4];
+            not_empty += 1.f;
+        }
+        if(mipmap_l0[l0_idx5].w > 0.f){
+            l1_color += mipmap_l0[l0_idx5];
+            not_empty += 1.f;
+        }
+        if(mipmap_l0[l0_idx6].w > 0.f){
+            l1_color += mipmap_l0[l0_idx6];
+            not_empty += 1.f;
+        }
+        if(mipmap_l0[l0_idx7].w > 0.f){
+            l1_color += mipmap_l0[l0_idx7];
+            not_empty += 1.f;
+        }        
 
-        if(l1_color.w != 0)
-            mipmap_l1[global_id] = l1_color / l1_color.w;
+        if(not_empty != 0){
+            mipmap_l1[global_id] = l1_color / not_empty;
+            return;
+        }
+            mipmap_l1[global_id] = l1_color;
         
     }
 }
@@ -1132,11 +1160,11 @@ KERNEL void VoxelVisualization(
             
             float4 c = voxel_color_data[voxel_idx]; 
             float4 val = clamp(native_powr(c / c.w, 1.f / gamma), 0.f, 1.f);
-            write_imagef(img, make_int2(global_idx + img_width, global_idy), val);
+            write_imagef(img, make_int2(global_idx, global_idy), val);
             
         }
         else
-            write_imagef(img, make_int2(global_idx + img_width, global_idy), make_float4(0.f, 0.f, 0.f, 1.f));
+            write_imagef(img, make_int2(global_idx, global_idy), make_float4(0.f, 0.f, 0.f, 1.f));
         
     }
 }
@@ -1167,6 +1195,9 @@ typedef struct
     GLOBAL float4* voxel_color_l7;
     float unit_l7;
     int voxelsize_l7;
+    GLOBAL float4* voxel_color_l8;
+    float unit_l8;
+    int voxelsize_l8;
 } Voxel;
 
 INLINE void Voxel_GetMipmapLevelData(Voxel const* voxel, int mipmap_level, GLOBAL float4** color, float* unit, int* voxel_size)
@@ -1211,6 +1242,11 @@ INLINE void Voxel_GetMipmapLevelData(Voxel const* voxel, int mipmap_level, GLOBA
             *color = voxel->voxel_color_l7;
             *unit = voxel->unit_l7;
             *voxel_size = voxel->voxelsize_l7;
+            return;
+        case 8:
+            *color = voxel->voxel_color_l8;
+            *unit = voxel->unit_l8;
+            *voxel_size = voxel->voxelsize_l8;
             return;
     }
     
@@ -1262,6 +1298,7 @@ float4 samplingVoxels(float3 p, GLOBAL float4* voxel_data, int3 voxel_coord, flo
     int idx7 = (voxel_coord.x + sample_range.x) + (voxel_coord.y + sample_range.y) * voxel_size + (voxel_coord.z + sample_range.z) * voxel_size * voxel_size;
 
     
+    /*
     float4 color01 = voxel_data[idx0] * (1 - bias.x) + voxel_data[idx1] * bias.x;
     float4 color23 = voxel_data[idx2] * (1 - bias.x) + voxel_data[idx3] * bias.x;
     float4 color45 = voxel_data[idx4] * (1 - bias.x) + voxel_data[idx5] * bias.x;
@@ -1270,14 +1307,24 @@ float4 samplingVoxels(float3 p, GLOBAL float4* voxel_data, int3 voxel_coord, flo
     float4 color0123 = color01 * (1 - bias.y) + color23  * bias.y;
     float4 color4567 = color45 * (1 - bias.y) + color67  * bias.y;
 
-    float4 color = color0123 * (1 - bias.z) + color4567 * bias.z;
+    float4 color = color0123 * (1 - bias.z) + color4567 * bias.z;*/
+
+    float4 color01 = mix(voxel_data[idx0], voxel_data[idx1], bias.x);
+    float4 color23 = mix(voxel_data[idx2], voxel_data[idx3], bias.x);
+    float4 color45 = mix(voxel_data[idx4], voxel_data[idx5], bias.x);
+    float4 color67 = mix(voxel_data[idx6], voxel_data[idx7], bias.x);
+
+    float4 color0123 = mix(color01, color23, bias.y);
+    float4 color4567 = mix(color45, color67, bias.y);
+
+    float4 color = mix(color0123, color4567, bias.z);
 
     
 
     return color;
 }
 
-float4 traceDiffuseVoxelCone(Voxel voxel, float3 from, float3 direction, float voxel_max, int mipmap_max){
+float4 traceDiffuseVoxelCone(Voxel voxel, float3 from, float3 direction, float voxel_max, int mipmap_max, float cone_tan){
     direction = normalize(direction);
     int level = 0;
     float dist = 0.f;
@@ -1286,14 +1333,15 @@ float4 traceDiffuseVoxelCone(Voxel voxel, float3 from, float3 direction, float v
     float unit_size_min;
     int voxel_size;
     Voxel_GetMipmapLevelData(&voxel, 0, &voxel_data, &unit_size_min, &voxel_size);
+    float max_voxel = unit_size_min * pow(2.f, mipmap_max);
 
     float4 acc = make_float4(0.f, 0.f, 0.f, 0.f);
     float occlusion = 0.f;
 
     float3 tracepos = from;
     
-    while(isInsideBBox(tracepos, voxel_max) && acc.w <= 1.f){
-        float conewidth = 0.5f * dist * 2.f;
+    while(isInsideBBox(tracepos, voxel_max) && acc.w < 1.f){
+        float conewidth = cone_tan * dist * 2.f;//0.5773f * dist * 2.f;
         float l = 1.f + conewidth / unit_size_min;
         level = min((int)log2(l), mipmap_max);
         float ll = (level + 1) * (level + 1);
@@ -1317,16 +1365,16 @@ float4 traceDiffuseVoxelCone(Voxel voxel, float3 from, float3 direction, float v
                 s2_voxel_coord = VoxelCoord(tracepos, s2_unit_size);
                 s2 = samplingVoxels(tracepos, s2_voxel_data, s2_voxel_coord, s2_unit_size, s2_voxel_size);
                 float weight = (conewidth - s2_unit_size) / s2_unit_size;
-                s1 = (1.f - weight) * s2 + weight * s1;                
+                s1 = mix(s2, s1, weight);              
             }
             if(conewidth > unit_size && level < mipmap_max){                
                 Voxel_GetMipmapLevelData(&voxel, level + 1, &s2_voxel_data, &s2_unit_size, &s2_voxel_size);
                 s2_voxel_coord = VoxelCoord(tracepos, s2_unit_size);
                 s2 = samplingVoxels(tracepos, s2_voxel_data, s2_voxel_coord, s2_unit_size, s2_voxel_size);
                 float weight = (conewidth - unit_size) / unit_size;
-                s1 = (1.f - weight) * s1 + weight * s2;                
+                s1 = mix(s1, s2, weight);                
             }
-            occlusion += (1.f - occlusion) * acc.w / (1.f + 64.f * ll);
+            occlusion += (1.f - occlusion) * acc.w / (1.f + (dist / unit_size_min));
             acc += (1.f - acc.w) * s1 * s1.w;
             //acc += c;           
         }
@@ -1335,8 +1383,10 @@ float4 traceDiffuseVoxelCone(Voxel voxel, float3 from, float3 direction, float v
         tracepos += direction * step;
 
     }
+    acc.w = 1.f - occlusion;
+    //acc *= (1.f - occlusion);
     //return make_float4(occlusion, occlusion, occlusion, occlusion);
-    return acc * (1.f - occlusion);
+    return acc;
 
 }
 
@@ -1349,6 +1399,7 @@ KERNEL void VoxelConeTracing(
     float orig_x,
     float orig_y,
     float orig_z,
+    float3 camera_pos,
     GLOBAL float4* voxel_color_data_l0,
     float unit_size_l0,
     int voxel_size_l0,
@@ -1373,6 +1424,10 @@ KERNEL void VoxelConeTracing(
     GLOBAL float4* voxel_color_data_l7,
     float unit_size_l7,
     int voxel_size_l7,
+    GLOBAL float4* voxel_color_data_l8,
+    float unit_size_l8,
+    int voxel_size_l8,
+    int mode,
     int img_width,
     int img_height,
     float gamma,
@@ -1403,7 +1458,10 @@ KERNEL void VoxelConeTracing(
         voxel_size_l6,
         voxel_color_data_l7,
         unit_size_l7,
-        voxel_size_l7
+        voxel_size_l7,
+        voxel_color_data_l8,
+        unit_size_l8,
+        voxel_size_l8
     };
 
     int global_id = get_global_id(0);
@@ -1424,20 +1482,50 @@ KERNEL void VoxelConeTracing(
 
             float3 pos = position.xyz / position.w - voxel_orig;
             float3 normal = normalize(normaldata.xyz / normaldata.w);
+
             const float3 ortho = GetOrthoVector(normal);
             const float3 ortho2 = normalize(cross(ortho, normal));
 
+            /*
             const float3 corner = 0.5f * (ortho + ortho2);
             const float3 corner2 = 0.5f * (ortho - ortho2);
+            */
+            
+            const float3 corner = normalize(mix(ortho, ortho2, 0.366f));
+            const float3 corner2 = normalize(mix(ortho, -ortho2, 0.366f));
+            
+            float angle_mix = 0.634f;
+            //normal cone weight and side cone weight
+            float2 weight = make_float2(0.142857f, 0.142857f);
 
-            float angle_mix = 0.6f;
+            float3 base_diffuse = albedo_data[global_id].xyz / albedo_data[global_id].w;
 
             float3 n_offset = normal * (1.f + 1.732f) * unit_size_l0;
             float3 c_origin = pos + n_offset;
 
             float4 acc = make_float4(0.f, 0.f, 0.f, 0.f);
             
-            acc += traceDiffuseVoxelCone(voxel, c_origin, normal, voxel_max, mipmap_level);
+            acc += weight.x * traceDiffuseVoxelCone(voxel, c_origin, normal, voxel_max, mipmap_level, 0.5773f);
+
+            float3 s1 = mix(normal, ortho, angle_mix);
+            float3 s2 = mix(normal, -ortho, angle_mix);
+            float3 c1 = mix(normal, corner, angle_mix);
+            float3 c2 = mix(normal, corner2, angle_mix);
+            float3 c3 = mix(normal, -corner, angle_mix);
+            float3 c4 = mix(normal, -corner2, angle_mix);
+            
+            acc += weight.y * traceDiffuseVoxelCone(voxel, c_origin, s1, voxel_max, mipmap_level, 0.5773f);
+            acc += weight.y * traceDiffuseVoxelCone(voxel, c_origin, s2, voxel_max, mipmap_level, 0.5773f);
+            acc += weight.y * traceDiffuseVoxelCone(voxel, c_origin, c1, voxel_max, mipmap_level, 0.5773f);
+            acc += weight.y * traceDiffuseVoxelCone(voxel, c_origin, c2, voxel_max, mipmap_level, 0.5773f);
+            acc += weight.y * traceDiffuseVoxelCone(voxel, c_origin, c3, voxel_max, mipmap_level, 0.5773f);
+            acc += weight.y * traceDiffuseVoxelCone(voxel, c_origin, c4, voxel_max, mipmap_level, 0.5773f);
+
+            float3 camera_dir = normalize(pos - camera_pos);
+            float3 rr_out = camera_dir - 2.f * dot(camera_dir, normal) * normal;
+
+            acc += weight.y * traceDiffuseVoxelCone(voxel, c_origin, rr_out, voxel_max, mipmap_level, 0.2f);
+/*
 
             float3 s1 = mix(normal, ortho, angle_mix);
             float3 s2 = mix(normal, -ortho, angle_mix);
@@ -1458,21 +1546,34 @@ KERNEL void VoxelConeTracing(
             acc += traceDiffuseVoxelCone(voxel, c_origin, c2, voxel_max, mipmap_level);
             acc += traceDiffuseVoxelCone(voxel, c_origin, c3, voxel_max, mipmap_level);
             acc += traceDiffuseVoxelCone(voxel, c_origin, c4, voxel_max, mipmap_level);
-/**/
-            acc /= 10.f;
-            acc.xyz *= albedo_data[global_id].xyz / albedo_data[global_id].w;
-            float4 c = make_float4(acc.x, acc.y, acc.z, 1.f);
-            //float4 c = acc / acc.w;
+*/
+            float4 c;
 
-            color.xyz += c.xyz;
+            acc.xyz *= acc.w * 0.5f;
+            if(mode == 5)//show AO
+                c = make_float4(acc.x, acc.y, acc.z, 1.f); 
+
+            acc.xyz *= base_diffuse;
             
-            /*float4 val = clamp(native_powr(c / c.w, 1.f / gamma), 0.f, 1.f);
-            write_imagef(img, make_int2(global_idx + img_width, global_idy), val);
-            return;*/
+            if(mode == 3)//show AO * diffuse
+                c = make_float4(acc.w, acc.w, acc.w, 1.f);           
+
+            if(mode == 4)//show indirect lighting
+                c = make_float4(acc.x, acc.y, acc.z, 1.f);
+            
+            color.xyz += acc.xyz;
+            //color.xyz *= acc.w;
+            
+            if(mode > 2){
+                float4 val = clamp(native_powr(c / c.w, 1.f / gamma), 0.f, 1.f);
+                write_imagef(img, make_int2(global_idx, global_idy), val);
+                return;
+            }
+            
         }
 
         float4 val = clamp(native_powr(color / color.w, 1.f / gamma), 0.f, 1.f);
-        write_imagef(img, make_int2(global_idx + img_width, global_idy), val);
+        write_imagef(img, make_int2(global_idx, global_idy), val);
     }
 }
 

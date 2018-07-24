@@ -472,20 +472,23 @@ namespace Baikal
 			auto normal_output = m_outputs[m_primary].output_normal.get();
 			auto albedo_output = m_outputs[m_primary].output_albedo.get();
 #endif
+			
+            int argc;			
+			int globalsize;
+			if (settings.voxel_mode == 0) {
+				argc = 0;
+				copykernel.SetArg(argc++, static_cast<Baikal::ClwOutput*>(output)->data());
+				copykernel.SetArg(argc++, static_cast<Baikal::ClwOutput*>(position_output)->data());
+				copykernel.SetArg(argc++, static_cast<Baikal::ClwOutput*>(normal_output)->data());
+				copykernel.SetArg(argc++, output->width());
+				copykernel.SetArg(argc++, output->height());
+				copykernel.SetArg(argc++, 2.2f);
+				copykernel.SetArg(argc++, m_cl_interop_image);
 
-            int argc = 0;			
+				globalsize = output->width() * output->height();
 
-            copykernel.SetArg(argc++, static_cast<Baikal::ClwOutput*>(output)->data());
-			copykernel.SetArg(argc++, static_cast<Baikal::ClwOutput*>(position_output)->data());
-			copykernel.SetArg(argc++, static_cast<Baikal::ClwOutput*>(normal_output)->data());
-            copykernel.SetArg(argc++, output->width());
-            copykernel.SetArg(argc++, output->height());
-            copykernel.SetArg(argc++, 2.2f);
-            copykernel.SetArg(argc++, m_cl_interop_image);
-
-			int globalsize = output->width() * output->height();
-
-            m_cfgs[m_primary].context.Launch1D(0, ((globalsize + 63) / 64) * 64, 64, copykernel);
+				m_cfgs[m_primary].context.Launch1D(0, ((globalsize + 63) / 64) * 64, 64, copykernel);
+			}
 
 			if ((settings.samplecount == 30 && !settings.voxel_created && settings.voxel_enabled) || settings.voxel_catch) {
 
@@ -564,7 +567,7 @@ namespace Baikal
 					}
 					settings.voxel_mipmaped = 1;
 				}
-				if (settings.voxel_mipmaped && settings.voxel_conetracing_enabled) {
+				if (settings.voxel_mipmaped && settings.voxel_mode > 1) {
 
 					argc = 0;
 
@@ -576,7 +579,8 @@ namespace Baikal
 					voxelconetracingkernel.SetArg(argc++, m_voxel_data.orig[0]);
 					voxelconetracingkernel.SetArg(argc++, m_voxel_data.orig[1]);
 					voxelconetracingkernel.SetArg(argc++, m_voxel_data.orig[2]);
-					for (int i = 0; i < 8; i++) {
+					voxelconetracingkernel.SetArg(argc++, sizeof(cl_float3), &settings.camera_pos);
+					for (int i = 0; i < 9; i++) {
 						if (i < m_voxel_data.mipmap_buffers.size()) {
 							voxelconetracingkernel.SetArg(argc++, m_voxel_data.mipmap_buffers[i]);
 							voxelconetracingkernel.SetArg(argc++, float(m_voxel_data.unit_size * pow(2, i)));
@@ -589,6 +593,7 @@ namespace Baikal
 							voxelconetracingkernel.SetArg(argc++, 0);
 						}
 					}
+					voxelconetracingkernel.SetArg(argc++, settings.voxel_mode);
 					voxelconetracingkernel.SetArg(argc++, output->width());
 					voxelconetracingkernel.SetArg(argc++, output->height());
 					voxelconetracingkernel.SetArg(argc++, 2.2f);
@@ -599,7 +604,7 @@ namespace Baikal
 					m_cfgs[m_primary].context.Launch1D(0, ((globalsize + 63) / 64) * 64, 64, voxelconetracingkernel);
 				}
 
-				if(settings.voxel_visualized){
+				if(settings.voxel_mode == 1){
 					//Voxel Visualization
 					argc = 0;
 					int mipmap_level = settings.voxel_mipmap_level;
@@ -704,13 +709,14 @@ namespace Baikal
 		fs.open(modelname, std::ios::out);
 		if (!fs)
 			std::cout << "Voxeldata save failed!\n";
+		std::cout << "Voxeldata saving...\n";
 		fs << "s " << m_voxel_data.color.size() << "\n";
 		for (size_t i = 0; i < m_voxel_data.color.size(); i++)
 		{
 			fs << "v " << m_voxel_data.color[i][0] << " " << m_voxel_data.color[i][1] << " " << m_voxel_data.color[i][2] << " " << m_voxel_data.color[i][3] << "\n";
 		}
 		fs.close();
-		std::cout << "Voxeldata save success!\n";
+		std::cout << "Voxeldata save completed!\n";
 	}
 
 	void AppClRender::LoadVoxelData(std::string dataname) {
@@ -722,7 +728,7 @@ namespace Baikal
 			switch (temp[0]) {
 			case 's':
 				ifile >> size;
-				std::cout << size << "\n";
+				std::cout << size << "\nVoxeldata loading...\n";
 				if (size != m_voxel_data.color.size()) {
 					std::cout << "Voxeldata in diffrent size !\n";
 					ifile.close();
@@ -735,6 +741,7 @@ namespace Baikal
 				break;
 			}
 		}
+		std::cout << "Voxeldata load completed!\n";
 		ifile.close();
 	}
 

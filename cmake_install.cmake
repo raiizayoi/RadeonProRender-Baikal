@@ -1,4 +1,4 @@
-# Install script for directory: I:/GitHub/RadeonProRender-Baikal
+# Install script for directory: D:/de/GitHub/RadeonProRender-Baikal
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
@@ -34,12 +34,12 @@ endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for each subdirectory.
-  include("I:/GitHub/RadeonProRender-Baikal/RadeonRays/cmake_install.cmake")
-  include("I:/GitHub/RadeonProRender-Baikal/Baikal/cmake_install.cmake")
-  include("I:/GitHub/RadeonProRender-Baikal/BaikalIO/cmake_install.cmake")
-  include("I:/GitHub/RadeonProRender-Baikal/BaikalStandalone/cmake_install.cmake")
-  include("I:/GitHub/RadeonProRender-Baikal/Gtest/cmake_install.cmake")
-  include("I:/GitHub/RadeonProRender-Baikal/BaikalTest/cmake_install.cmake")
+  include("D:/de/GitHub/RadeonProRender-Baikal/RadeonRays/cmake_install.cmake")
+  include("D:/de/GitHub/RadeonProRender-Baikal/Baikal/cmake_install.cmake")
+  include("D:/de/GitHub/RadeonProRender-Baikal/BaikalIO/cmake_install.cmake")
+  include("D:/de/GitHub/RadeonProRender-Baikal/BaikalStandalone/cmake_install.cmake")
+  include("D:/de/GitHub/RadeonProRender-Baikal/Gtest/cmake_install.cmake")
+  include("D:/de/GitHub/RadeonProRender-Baikal/BaikalTest/cmake_install.cmake")
 
 endif()
 
@@ -51,5 +51,5 @@ endif()
 
 string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT
        "${CMAKE_INSTALL_MANIFEST_FILES}")
-file(WRITE "I:/GitHub/RadeonProRender-Baikal/${CMAKE_INSTALL_MANIFEST}"
+file(WRITE "D:/de/GitHub/RadeonProRender-Baikal/${CMAKE_INSTALL_MANIFEST}"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")

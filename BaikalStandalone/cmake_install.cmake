@@ -1,4 +1,4 @@
-# Install script for directory: I:/GitHub/RadeonProRender-Baikal/BaikalStandalone
+# Install script for directory: D:/de/GitHub/RadeonProRender-Baikal/BaikalStandalone
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)

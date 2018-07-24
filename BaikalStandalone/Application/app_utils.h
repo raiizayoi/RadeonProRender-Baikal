@@ -101,8 +101,7 @@ namespace Baikal
 		int voxel_mipmaped;
 		int voxel_mipmap_level;
 		int voxel_catch;
-		int voxel_visualized;
-		int voxel_conetracing_enabled;
+		int voxel_mode;
     };
 
     class AppCliParser

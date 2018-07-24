@@ -92,8 +92,15 @@ namespace Baikal
 	static bool     g_is_pgdn_pressed = false;
 	static bool     g_is_c_pressed = false;
 	static bool     g_is_v_pressed = false;
-	static bool     g_is_b_pressed = false;
+	static bool     g_is_b_pressed = true;
 	static bool     g_is_p_pressed = false;
+	static bool     g_is_z_pressed = false;
+	static bool     g_is_0_pressed = false;
+	static bool     g_is_1_pressed = false;
+	static bool     g_is_2_pressed = false;
+	static bool     g_is_3_pressed = false;
+	static bool     g_is_4_pressed = false;
+	static bool     g_is_5_pressed = false;
 
     auto start = std::chrono::high_resolution_clock::now();
 
@@ -313,6 +320,27 @@ namespace Baikal
 		case GLFW_KEY_P:
 			g_is_p_pressed = action == GLFW_PRESS;
 			break;
+		case GLFW_KEY_Z:
+			g_is_z_pressed = action == GLFW_PRESS;
+			break;
+		case GLFW_KEY_0:
+			g_is_0_pressed = action == GLFW_PRESS;
+			break;
+		case GLFW_KEY_1:
+			g_is_1_pressed = action == GLFW_PRESS;
+			break;
+		case GLFW_KEY_2:
+			g_is_2_pressed = action == GLFW_PRESS;
+			break;
+		case GLFW_KEY_3:
+			g_is_3_pressed = action == GLFW_PRESS;
+			break;
+		case GLFW_KEY_4:
+			g_is_4_pressed = action == GLFW_PRESS;
+			break;
+		case GLFW_KEY_5:
+			g_is_5_pressed = action == GLFW_PRESS;
+			break;
         default:
             break;
         }
@@ -328,7 +356,7 @@ namespace Baikal
         bool update = update_required;
         float camrotx = 0.f;
         float camroty = 0.f;
-
+		/*
 		if (m_settings.voxel_created < 1 && m_settings.voxel_enabled) {
 			float3 light_pos, light_at, light_up;
 			switch (m_settings.voxel_sample_count)
@@ -338,11 +366,11 @@ namespace Baikal
 					light_at = float3(0.f, 0.25f, -1.04f);
 					light_up = float3(0.f, 0.f, 1.f);
 					break;
-				/*case 1:
+				case 1:
 					light_pos = float3(-0.01f, 1.97f, 0.5f);
 					light_at = float3(0.f, 0.5f, 0.99f);
 					light_up = float3(0.f, 1.f, 0.f);
-					break;*/
+					break;
 				case 2:
 					light_pos = float3(0.25f, 1.97f, -0.03f);
 					light_at = float3(1.f, 0.5f, 0.f);
@@ -358,17 +386,17 @@ namespace Baikal
 					light_at = float3(0.f, 0.5f, 0.99f);
 					light_up = float3(0.f, 0.f, 1.f);
 					break;
-				/*case 5:
+				case 5:
 					light_pos = float3(-0.75f, 1.25f, 0.f);
 					light_at = float3(-1.f, 0.5f, -1.f);
 					light_up = float3(0.f, 1.f, 0.f);
-					break;*/								
+					break;								
 			}
 			
 			auto light_camera = m_cl->GetCamera();
 			light_camera->LookAt(light_pos, light_at, light_up);
 		}
-		else {
+		else {*/
 			const float kMouseSensitivity = 0.001125f;
 			const float kScrollSensitivity = 0.05f;
 			auto camera = m_cl->GetCamera();
@@ -460,7 +488,8 @@ namespace Baikal
 				if (g_is_c_pressed) 
 				{
 					g_is_c_pressed = false;
-					m_settings.voxel_catch = 1;
+					if(m_settings.num_bounces == 1)
+						m_settings.voxel_catch = 1;
 				}
 
 				if (g_is_v_pressed)
@@ -476,17 +505,70 @@ namespace Baikal
 					m_settings.voxel_created = 1;
 					m_settings.voxel_enabled = 1;
 					m_settings.voxel_mipmaped = 0;
+					update = true;
 				}
 
 				if (g_is_p_pressed)
 				{
 					g_is_p_pressed = false;
-					m_settings.voxel_visualized = !m_settings.voxel_visualized;
-					m_settings.voxel_conetracing_enabled = !m_settings.voxel_conetracing_enabled;
+					if (m_settings.num_samples == -1)
+						m_settings.num_samples = m_settings.samplecount + 1;
+					else {
+						m_settings.num_samples = -1;
+						m_settings.samplecount = 0;
+						update = true;
+					}
 					
 				}
+				if (g_is_z_pressed)
+				{
+					g_is_z_pressed = false;
+					update = true;
+				}
+
+				if (g_is_0_pressed)
+				{
+					g_is_0_pressed = false;
+					m_settings.voxel_mode = 0;
+					update = true;
+				}
+
+				if (g_is_1_pressed)
+				{
+					g_is_1_pressed = false;
+					m_settings.voxel_mode = 1;
+				}
+
+				if (g_is_2_pressed)
+				{
+					g_is_2_pressed = false;
+					m_settings.voxel_mode = 2;
+					m_settings.num_bounces = 1;
+					update = true;
+				}
+
+				if (g_is_3_pressed)
+				{
+					g_is_3_pressed = false;
+					m_settings.voxel_mode = 3;
+					update = true;
+				}
+
+				if (g_is_4_pressed)
+				{
+					g_is_4_pressed = false;
+					m_settings.voxel_mode = 4;
+					update = true;
+				}
+
+				if (g_is_5_pressed)
+				{
+					g_is_5_pressed = false;
+					m_settings.voxel_mode = 5;
+					update = true;
+				}
 			}
-		}
+		//}
         if (update)
         {
             //if (g_num_samples > -1)
@@ -616,7 +698,7 @@ namespace Baikal
     #endif
 
             // GLUT Window Initialization:
-            m_window = glfwCreateWindow(m_settings.width * 2, m_settings.height, "Baikal standalone demo", nullptr, nullptr);
+            m_window = glfwCreateWindow(m_settings.width, m_settings.height, "Baikal standalone demo", nullptr, nullptr);
             glfwMakeContextCurrent(m_window);
 
     #ifndef __APPLE__

@@ -28,3 +28,6 @@
 orig.objm.txt
 Resources/sponza/copyright.txt
 *.png
+*.depend
+*.txt
+orig.objm.txt
