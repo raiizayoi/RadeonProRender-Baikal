@@ -299,3 +299,14 @@ We provide an implementation of RPR API with Baikal, which is still in an early 
 * Analytic sky system
 
 
+# My Install Step
+* Get git file
+```
+git clone --recursive https://github.com/raiizayoi/RadeonProRender-Baikal.git
+```
+* Install OpenCL
+* Install python
+* Install cmake
+* Create Visual Studio 2015 Solution
+
+`cmake -G "Visual Studio 14 2015 Win64"`
